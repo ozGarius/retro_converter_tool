@@ -20,32 +20,34 @@ except ImportError:
 # GUI Text: Simplified text like "to CHD", "to ISO"
 menu_data = [
     ["Nintendo GameCube / Nintendo Wii", [
-        ['10', "ISO to RVZ",        "to RVZ",       ['iso'], 'rvz', None, conversions.convert_iso_to_rvz_routine],
-        ['11', "RVZ to ISO",        "to ISO",       ['rvz'], 'iso', None, conversions.convert_rvz_to_iso_routine],
-        ['12', "7Z/ZIP/RAR to RVZ", "Extract and convert to RVZ", ['7z', 'zip', 'rar'], 'rvz', None, conversions.convert_archive_to_rvz_routine],
+        ['10', "ISO to RVZ",        "to RVZ",                      ['iso'],               'rvz', None, conversions.convert_iso_to_rvz_routine],
+        ['11', "RVZ to ISO",        "to ISO",                      ['rvz'],               'iso', None, conversions.convert_rvz_to_iso_routine],
+        ['12', "7Z/ZIP/RAR to RVZ", "Extract and convert to RVZ",  ['7z', 'zip', 'rar'],  'rvz', None, conversions.convert_archive_to_rvz_routine],
     ]],
     ["Sony Playstation 1 / Sega Saturn / Sega CD", [
-        ['20', "ISO/CUE/IMG to CHD", "to CHD",      ['iso', 'cue', 'img'], 'chd', None, conversions.convert_discimage_to_chd_routine],
-        ['21', "7Z/ZIP/RAR to CHD",  "Extract and convert to CHD", ['7z', 'zip', 'rar'], 'chd', None, conversions.convert_archive_to_chd_routine],
-        ['23', "CHD to CUE/BIN",     "to CUE/BIN",   ['chd'], 'cue', 'bin', conversions.convert_chd_to_cuebin_routine],
-        ['24', "CHD to ISO",         "to ISO",       ['chd'], 'iso', None, conversions.convert_chd_to_iso_routine],
+        ['20', "ISO/CUE/IMG to CHD", "to CHD",                     ['iso', 'cue', 'img'], 'chd', None, conversions.convert_discimage_to_chd_routine],
+        ['21', "7Z/ZIP/RAR to CHD",  "Extract and convert to CHD", ['7z', 'zip', 'rar'],  'chd', None, conversions.convert_archive_to_chd_routine],
+        ['23', "CHD to CUE/BIN",     "to CUE/BIN",                 ['chd'],               'cue', 'bin', conversions.convert_chd_to_cuebin_routine],
+        ['24', "CHD to CD ISO",      "to CD ISO",                  ['chd'],               'iso', None, conversions.convert_chd_to_cdiso_routine],
     ]],
     ["Sega Dreamcast", [
-        ['30', "GDI/CUE to CHD",    "to CHD",       ['gdi', 'cue'], 'chd', None, conversions.convert_discimage_to_chd_routine],
-        ['31', "7Z/ZIP/RAR to CHD", "Extract and convert to CHD", ['7z', 'zip', 'rar'], 'chd', None, conversions.convert_archive_to_chd_routine],
-        ['32', "CHD to GDI",        "to GDI",       ['chd'], 'gdi', None, conversions.convert_chd_to_gdi_routine],
+        ['30', "GDI/CUE to CHD",    "to CHD",                      ['gdi', 'cue'],        'chd', None, conversions.convert_discimage_to_chd_routine],
+        ['31', "7Z/ZIP/RAR to CHD", "Extract and convert to CHD",  ['7z', 'zip', 'rar'],  'chd', None, conversions.convert_archive_to_chd_routine],
+        ['32', "CHD to GDI",        "to GDI",                      ['chd'],               'gdi', None, conversions.convert_chd_to_gdi_routine],
     ]],
     ["Sony Playstation 2", [
-        ['40', "ISO to CHD",        "to CHD",       ['iso'], 'chd', None, conversions.convert_discimage_to_chd_routine],
-        ['41', "7Z/ZIP/RAR to CHD", "Extract and convert to CHD", ['7z', 'zip', 'rar'], 'chd', None, conversions.convert_archive_to_chd_routine],
-        ['42', "CSO to CHD",        "to CHD",       ['cso'], 'chd', None, conversions.convert_cso_to_chd_routine],
+        ['40', "ISO to CHD",        "to CHD",                      ['iso'],               'chd', None, conversions.convert_discimage_to_chd_routine],
+        ['41', "7Z/ZIP/RAR to CHD", "Extract and convert to CHD",  ['7z', 'zip', 'rar'],  'chd', None, conversions.convert_archive_to_chd_routine],
+        ['42', "CSO to CHD",        "to CHD",                      ['cso'],               'chd', None, conversions.convert_cso_to_chd_routine],
+        ['24', "CHD to CD ISO",     "to CD ISO",                   ['chd'],               'iso', None, conversions.convert_chd_to_cdiso_routine],
+        ['24', "CHD to DVD ISO",    "to DVD ISO",                  ['chd'],               'iso', None, conversions.convert_chd_to_dvdiso_routine],
     ]],
     ["Playstation Portable", [
-        ['50', "ISO to CSO",        "to CSO",       ['iso'], 'cso', None, conversions.convert_iso_to_cso_routine],
-        ['51', "7Z/ZIP/RAR to CSO", "Extract and convert to CSO", ['7z', 'zip', 'rar'], 'cso', None, conversions.convert_archive_to_cso_routine],
+        ['50', "ISO to CSO",        "to CSO",                      ['iso'],               'cso', None, conversions.convert_iso_to_cso_routine],
+        ['51', "7Z/ZIP/RAR to CSO", "Extract and convert to CSO",  ['7z', 'zip', 'rar'],  'cso', None, conversions.convert_archive_to_cso_routine],
     ]],
     ["Archiving", [
-        ['90', "ZIP/RAR to 7Z",     "Archive to 7Z", ['zip', 'rar'], '7z', None, conversions.convert_archive_to_7z_routine],
+        ['90', "ZIP/RAR to 7Z",     "Archive to 7Z",               ['zip', 'rar'],        '7z', None, conversions.convert_archive_to_7z_routine],
     ]],
     ["Audio", [
         # These are handled specially and don't need GUI text here

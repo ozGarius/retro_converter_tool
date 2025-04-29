@@ -115,8 +115,8 @@ def convert_chd_to_cuebin_routine(processing_path, temp_dir, name, output_signal
 
     return True # Success
 
-def convert_chd_to_iso_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None):
-    """Attempts to convert a CHD file directly to ISO using chdman extractcd."""
+def convert_chd_to_cdiso_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None):
+    """Attempts to convert a CHD file directly to CD ISO using chdman extractcd."""
     msg = f">> Attempting to extract CHD to ISO: \"{os.path.basename(processing_path)}\""
     if output_signal: output_signal.emit(msg)
     else: print(f"\033[91m>>\033[32m {msg}\033[0m")
@@ -127,6 +127,62 @@ def convert_chd_to_iso_routine(processing_path, temp_dir, name, output_signal=No
 
     output_iso_path = os.path.join(temp_dir, f"{name}.iso")
     command = [config.TOOL_CHDMAN, 'extractcd', '-i', processing_path, '-o', output_iso_path]
+
+    # Run command, passing signals
+    run_success = utils.run_command(command, output_signal=output_signal, error_signal=error_signal)
+    if not run_success:
+        warn_msg = "   chdman command returned an error, checking if ISO was created anyway..."
+        if error_signal: error_signal.emit(warn_msg)
+        else: print(f"\033[93m{warn_msg}\033[0m")
+
+    # Verify output ISO file
+    if os.path.exists(output_iso_path) and os.path.getsize(output_iso_path) > 0:
+        msg = f"   Successfully extracted to \"{os.path.basename(output_iso_path)}\"."
+        if output_signal: output_signal.emit(msg)
+        else: print(f"\033[92m{msg}\033[0m")
+
+        # Check for other potentially problematic files (like .cue)
+        other_files = glob.glob(os.path.join(temp_dir, f"{name}.*"))
+        other_files = [f for f in other_files if not f.lower().endswith('.iso')]
+        if other_files:
+            other_names = [os.path.basename(f) for f in other_files]
+            warn_msg = f"   Warning: Other files found ({other_names}), source might have been multi-track. ISO validity not guaranteed."
+            if error_signal: error_signal.emit(warn_msg)
+            else: print(f"\033[93m{warn_msg}\033[0m")
+        return True # Success (with potential warning)
+    else:
+        # Handle failure
+        err_msg1 = f"ERROR: Failed to create output ISO file \"{os.path.basename(output_iso_path)}\"."
+        err_msg2 = "       The CHD may be multi-track (from CUE/BIN or GDI)."
+        err_msg3 = "       Try extracting to CUE/BIN or GDI instead."
+        if error_signal:
+            error_signal.emit(err_msg1)
+            error_signal.emit(err_msg2)
+            error_signal.emit(err_msg3)
+        else:
+            print(f"\033[91m{err_msg1}\033[0m")
+            print(f"\033[91m{err_msg2}\033[0m")
+            print(f"\033[91m{err_msg3}\033[0m")
+
+        # Clean up any partial files created by failed extraction
+        other_files = glob.glob(os.path.join(temp_dir, f"{name}.*"))
+        for f in other_files:
+            try: os.remove(f)
+            except OSError: pass
+        return False # Failure
+
+def convert_chd_to_dvdiso_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None):
+    """Attempts to convert a CHD file directly to DVD ISO using chdman extractdvd."""
+    msg = f">> Attempting to extract CHD to ISO: \"{os.path.basename(processing_path)}\""
+    if output_signal: output_signal.emit(msg)
+    else: print(f"\033[91m>>\033[32m {msg}\033[0m")
+
+    note_msg = "   NOTE: This conversion may only work for CHDs created from single-track ISOs."
+    if output_signal: output_signal.emit(note_msg)
+    else: print(f"\033[93m{note_msg}\033[0m")
+
+    output_iso_path = os.path.join(temp_dir, f"{name}.iso")
+    command = [config.TOOL_CHDMAN, 'extractdvd', '-i', processing_path, '-o', output_iso_path]
 
     # Run command, passing signals
     run_success = utils.run_command(command, output_signal=output_signal, error_signal=error_signal)
@@ -318,6 +374,7 @@ def convert_discimage_to_chd_routine(processing_path, temp_dir, name, output_sig
         return False
 
     return True # Success
+
 
 def convert_iso_to_cso_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None):
     """Converts an ISO file to CSO."""
