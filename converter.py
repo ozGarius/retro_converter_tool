@@ -1,7 +1,7 @@
 # converter.py (Launcher Script)
 import os
 import sys
-import argparse # Use argparse for better argument handling
+import argparse  # Use argparse for better argument handling
 
 # --- Path Setup & Module Import ---
 try:
@@ -13,7 +13,7 @@ try:
     # Check if convert_tools directory exists
     if not os.path.isdir(convert_tools_path):
         print(f"\033[91mERROR: The directory '{convert_tools_path}' does not exist.\033[0m")
-        print(f"Ensure 'converter.py' is in the same directory as the 'convert_tools' folder.")
+        print("Ensure 'converter.py' is in the same directory as the 'convert_tools' folder.")
         raise FileNotFoundError("convert_tools directory not found")
 
     # Add the convert_tools directory *directly* to sys.path
@@ -21,25 +21,21 @@ try:
         sys.path.insert(0, convert_tools_path)
 
     # Import modular components
-    import config         # Settings and tool paths
-    import utils          # Helper functions (run_command, cleanup, etc.)
-    import cli            # Command-line interface logic
-    # Import gui later when it's created
-    import gui
+    from convert_tools import gui, config, utils, cli
 
 except (ImportError, FileNotFoundError) as e:
     # Construct the expected path again for the error message
     main_script_dir_error = os.path.dirname(os.path.abspath(__file__))
     convert_tools_path_error = os.path.join(main_script_dir_error, 'convert_tools')
     print(f"\033[91mERROR: Failed setup or import from '{convert_tools_path_error}'.\033[0m")
-    print(f"Ensure 'config.py', 'utils.py', 'conversions.py', 'cli.py', 'gui.py' (eventually),")
-    print(f"and '__init__.py' (empty file) are inside the 'convert_tools' folder,")
-    print(f"and 'converter.py' is in the directory containing 'convert_tools'.")
+    print("Ensure 'config.py', 'utils.py', 'conversions.py', 'cli.py', 'gui.py' (eventually),")
+    print("and '__init__.py' (empty file) are inside the 'convert_tools' folder,")
+    print("and 'converter.py' is in the directory containing 'convert_tools'.")
     print(f"\nDetails: {e}")
     input("\nPress Enter to exit.")
     sys.exit(1)
 except Exception as e:
-    print(f"\033[91mERROR: An unexpected error occurred during setup.\033[0m")
+    print("\033[91mERROR: An unexpected error occurred during setup.\033[0m")
     print(f"Details: {e}")
     input("\nPress Enter to exit.")
     sys.exit(1)
@@ -78,16 +74,16 @@ if args.gui:
     print("Launching GUI...")
     try:
         # --- Placeholder for GUI launch ---
-        import gui # Import gui module here
+        # import gui  # Import gui module here
         gui.run_gui()
         # --- End Placeholder ---
     except ImportError:
-         print("\033[91mERROR: Failed to import the 'gui' module.\033[0m")
-         print("Ensure 'gui.py' exists in the 'convert_tools' directory.")
-         input("Press Enter to exit.")
-         sys.exit(1)
+        print("\033[91mERROR: Failed to import the 'gui' module.\033[0m")
+        print("Ensure 'gui.py' exists in the 'convert_tools' directory.")
+        input("Press Enter to exit.")
+        sys.exit(1)
     except Exception as e:
-        print(f"\033[91mERROR: Failed to launch GUI.\033[0m")
+        print("\033[91mERROR: Failed to launch GUI.\033[0m")
         print(f"Details: {e}")
         input("Press Enter to exit.")
         sys.exit(1)
@@ -95,4 +91,3 @@ else:
     print("Launching Command-Line Interface (CLI)...")
     # Pass the input path argument (if provided) to the CLI runner
     cli.run_cli(input_path_from_args=args.input_path)
-

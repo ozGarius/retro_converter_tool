@@ -1,85 +1,114 @@
-## Oz Converter Tool - Qt6 GUI Development Plan
+# Converter Tool - TODO & Progress
+This document tracks the development progress, remaining tasks, and future plans for the Oz Converter Tool, featuring a Qt6 GUI.
 
-This document outlines the next steps, potential enhancements, and testing procedures for the Qt6-based GUI of the converter tool.
+## I. Completed Milestones & Major Features
+The following significant features and refactoring efforts have been implemented:
 
-### I. Remaining Essential Tasks
++ Major GUI Redesign (from Screenshot):
+    + UI loaded from .ui file (main_window.ui).
+    + New layout with distinct sections (Job, Input files, Output Folder) using QGroupBox.
+    * Dynamic Job/Media Type selection logic.
+    + Dynamic updates for Input/Output file type labels and the main action button text.
+    + Comprehensive Output Folder selection logic, including "Output in same folder" and conditional visibility.
+    + New Output Section Checkboxes: "Overwrite existing files," "Delete input files after completing job," "Output in same folder."
+    + Interactive "Select input file types" button with a checkable menu for filtering.
+    + Interactive "Select output file type" button with a menu to choose the primary output format.
 
-These items are crucial for achieving the core functionality intended for the GUI version:
++ Backend Refinements:
+    + Standardized logging in utils.py and conversions.py using _emit_or_print for GUI and console.
+    + Archive Handling: Compression routines in conversions.py now auto-extract supported input archives.
+    + Flexible Dolphin Output: compress_dolphin_routine in conversions.py supports multiple output formats (RVZ, GCZ, VIA) based on GUI selection.
+    + Explicit Output Directory: utils.process_file and utils.move_files now correctly handle user-specified output locations.
+    + File Overwrite Logic: utils.py respects the "Overwrite existing files" setting.
 
-1.  **Backend Logging Refactoring (CRITICAL):**
-    * **Task:** Modify `utils.run_command`, `utils.process_file`, and all functions in `conversions.py` to capture stdout/stderr from external tools instead of printing directly.
-    * **Goal:** Return captured output/errors so the `ConversionWorker` thread in `gui.py` can emit them via signals to populate the GUI's log `QTextEdit` accurately. This is essential for user feedback during conversions.
-    * **Status:** `utils.py` and `conversions.py` have been refactored to support signals, but the `ConversionWorker` in `gui.py` still needs the final integration step (calling the refactored `utils.process_file` correctly).
++ GUI Functionality & Polish:
+    + Table Right-Click Context Menu: Implemented for file list management (select all, clear selection, remove, clear all).
+    + Thread Cancellation/Stopping: ConversionWorker can be requested to stop, and closeEvent handles this.
+    + Auto-selecting newly added files in the table.
+    + Table rows visually enabled/disabled based on active input filters.
+    + Corrected file path and type display when adding folders.
+    + Improved application exit behavior.
+    + Adjusted table header spacing for a cleaner look.
 
-2.  **Table Right-Click Menu:**
-    * **Task:** Implement a context menu (right-click) for the `QTableWidget` in `gui.py`.
-    * **Goal:** Allow users to select one or more rows and remove the corresponding files from the list (`self.table_data` and the `QTableWidget`).
++ Restructured cli:
+    + Remove the audio portion as it's not part of the project anymore.
+    + cli menu should be restructured in Compress and Extract and should follow the flow of the gui:
+        1. Choose one of the compress function, extract functions or convert function
+        2. Choose the type of input file
+        3. Choose the input file/folder
+        4. Choose the type of output file and the options (ex. overwrite, delete input on successfull covertion, copy locally)
+        5. Choose an output folder if not output in the same folder
 
-3.  **Handle Audio Conversion Options (Menu 80/81):**
-    * **Task:** Decide how to integrate the "Audio to Audio" and "Folder to FLAC" options into the GUI.
-    * **Goal:** These currently require extra user input (formats for 80) or operate differently (folder input for 81). They might need a separate dialog or section in the GUI, distinct from the standard file-type-based conversion flow. The current GUI logic skips these.
+## II. Ongoing / Partially Completed Tasks
+1. Robust Error Handling (General):
+    + Status: Basic try-except blocks are in place in utils.py and ConversionWorker.
+    + Next:
+        + Implement more specific error detection (e.g., insufficient disk space before starting a job, specific exit codes from command-line tools if they provide them).
+        + Refine how critical errors are presented to the user (e.g., when to use a QMessageBox vs. just the log).
 
-4.  **Robust Error Handling:**
-    * **Task:** Enhance error handling throughout the process.
-    * **Goal:** Catch and report errors more gracefully (e.g., file permissions issues during copy/move/delete, disk space limitations, corrupt input files detected by tools, tools crashing unexpectedly). Display informative messages to the user via the GUI (dialogs or status bar/log).
+2. Backend Logging & Error Display (Refinement Needed):
+    + Status: Mechanism is largely in place.
+    + Next: Thorough testing across all conversion routines and error conditions to ensure all tool outputs (stdout/stderr) and internal messages are captured comprehensively and displayed clearly and promptly in the GUI log. Consider if any specific errors warrant a dialog box in addition to a log message.
 
-5.  **Thread Cancellation/Stopping (Recommended):**
-    * **Task:** Implement a mechanism to safely request the `ConversionWorker` thread to stop.
-    * **Goal:** Allow users to cancel an ongoing batch conversion process without abruptly killing the application. This requires adding a flag checked within the worker's loop and potentially signalling external processes to terminate if possible. Update the `closeEvent` to use this mechanism.
+## III. Next Steps / Remaining Tasks
+1. Implement "Get info from media" & "Verify media" Job Types:
+    + Define these new jobs and their associated media types in menu_definitions.py.
+        + output_ext will likely be None or [].
+        + requires_output_folder will be False.
+    + Create new corresponding functions in conversions.py (e.g., get_media_info_routine, verify_media_routine).
+        + These functions will execute tools like chdman info or chdman verify -i <input>.
+        + They should capture and return the text output from these tools.
+    + Update gui.py:
+        + The ConversionWorker will need to handle jobs that return text instead of creating files.
+        + Decide how to display this text output to the user (e.g., append to the main log, show in a separate read-only QTextEdit dialog, or a new dedicated area in the GUI if these jobs are frequently used).
+        + Ensure the "Output Folder" section in the GUI is correctly disabled/hidden when these jobs are selected.
 
-6.  **Packaging/Distribution:**
-    * **Task:** Plan how the application will be packaged for end-users.
-    * **Goal:** Use tools like PyInstaller or cx_Freeze to create standalone executables for target platforms (e.g., Windows), ensuring all dependencies (PySide6, backend modules) and external tools (`7za.exe`, `chdman.exe`, etc.) are included correctly.
+2. Refine "Extract Archive to Folder" Functionality:
+    + Current: extract_archive_to_folder_routine in conversions.py extracts files to the temp_dir.
+    + Needed: utils.process_file needs to be enhanced to correctly handle the case where format_out is None or empty (signifying a folder output).
+        + It should move the entire contents of the temp_dir (where the archive was extracted) to the final_output_destination_base.
+        + Consider creating a subfolder within final_output_destination_base named after the original archive (e.g., output_folder/my_archive_files/). utils.move_files might need adaptation or a new helper for this directory content move.
 
-### II. Potential Improvements
+3. Packaging/Distribution:
+    + Plan and implement application packaging using tools like PyInstaller or cx_Freeze to create standalone executables for target platforms (e.g., Windows).
+    + Ensure all dependencies (PySide6, backend modules) and external tools (7za.exe, chdman.exe, etc.) are correctly included in the distribution package.
 
-These items would enhance the usability and functionality of the existing features:
+## IV. Deferred / Out of Scope (For Current Phase)
+Audio Conversion Options: Removed from conversions.py as per recent decision.
 
-* **GUI Enhancements:**
-    * **Progress Indication:** Add a progress bar (either overall or potentially per-file in the table) to give better visual feedback during long conversions.
-    * **Drag and Drop:** Allow users to drag files and folders directly onto the table widget to add them.
-    * **Persistent Settings:** Use `QSettings` to save and load user preferences (like window size/position, settings dialog choices) between sessions.
-    * **Table Customization:** Allow users to show/hide or reorder table columns.
-    * **Advanced Filtering/Sorting:** Add more options for sorting the file list (e.g., by size, date) or filtering beyond just the file type.
-    * **Theming:** Ensure consistent look and feel, potentially offering light/dark theme options if desired.
-* **Backend Enhancements:**
-    * **Configuration File:** Move tool paths and potentially default options from `config.py` to an external configuration file (e.g., INI, JSON, YAML) for easier modification by users without editing code.
-    * **More Granular Error Reporting:** Modify conversion routines to return more specific error codes or messages based on the output of the external tools.
+## V. Potential Future Enhancements (Lower Priority / From Original TODO)
++ UI Polish & Features:
+    + Progress Indication: Add a QProgressBar (overall or per-file) for long conversions.
+    + Drag and Drop: Allow adding files/folders by dragging them onto the file table.
+    + Persistent Settings: Use QSettings to save and load user preferences (window size/position, last used folders, checkbox states, selected job/media types) between sessions.
+    + Advanced Filtering/Sorting in Table: More options for the file list.
+    + Theming: Light/dark theme options.
 
-### III. New Ideas / Future Features
++ Backend Enhancements:
+    + External Configuration File: Move tool paths and default options from config.py to an INI, JSON, or YAML file for easier user modification.
 
-These are potential new capabilities to consider for future versions:
++ New Feature Ideas:
+    + Batch Renaming.
+    + Conversion Presets.
+    + Queue Management (pause, resume, reorder).
+    + Plugin System for new formats/tools.
+    + Metadata Integration.
 
-* **Batch Renaming:** Option to automatically rename output files based on patterns or metadata after successful conversion.
-* **Conversion Presets:** Allow users to save and load specific combinations of settings and conversion types.
-* **Queue Management:** Implement features to pause, resume, or reorder files within the conversion queue.
-* **Plugin System:** Design a system to allow adding new conversion formats or tools via plugins without modifying the core code.
-* **Metadata Integration:** For relevant formats (like audio, potentially some disc images), read/write metadata tags.
-
-### IV. Testing Strategy
-
-A thorough testing process is vital to ensure stability and correctness:
-
-1.  **Component Testing (Manual/Unit):**
-    * Test `utils.py` functions independently where possible (e.g., path normalization, temporary directory creation/cleanup logic).
-    * Test individual conversion routines in `conversions.py` (potentially mocking `utils.run_command` to isolate logic).
-2.  **GUI Interaction Testing (Manual):**
-    * **File Loading:** Add single/multiple files, add folders (recursive/non-recursive), add mixed content, add already listed files, clear list. Test drag and drop if implemented.
-    * **Table Interaction:** Select/deselect rows (single/multiple), sort columns, test right-click removal (if implemented).
-    * **Filtering/Selection:** Select different file types in the dropdown, verify correct rows are enabled/disabled and checked/unchecked. Verify manual checking is prevented for disabled rows. Verify conversion dropdown populates correctly. Verify blank selection behavior.
-    * **Settings Dialog:** Open dialog, change all settings, click Save, verify changes are reflected (e.g., in log messages for `COPY_LOCALLY`), reopen to confirm persistence (if `QSettings` implemented). Test Cancel button. Test validation (e.g., invalid temp path).
-    * **Conversion Execution:** Run each defined conversion type with valid input files. Verify successful completion, correct output files, and informative log messages. Test converting multiple files.
-    * **Log Output:** Verify log visibility toggle, clear log button. Check log content for clarity, completeness (including tool stdout/stderr), and correct error formatting.
-    * **UI State:** Verify UI elements are correctly disabled during conversion and re-enabled afterwards. Test cancelling (if implemented).
-    * **Window Behavior:** Test resizing (table column stretching, log area expansion), test minimum window size constraint.
-3.  **Error Condition Testing (Manual):**
-    * **Invalid Inputs:** Try converting corrupted or incorrect file types.
-    * **Tool Errors:** Simulate external tool failures (e.g., temporarily rename `chdman.exe`) and verify errors are reported.
-    * **Permissions:** Test with files/folders the application might not have read/write access to. Test scenarios where the temp directory or output directory is not writable.
-    * **Edge Cases:** Use paths with spaces or special characters. Test with very large files. Test with empty input folders. Test source deletion/local copy options thoroughly.
-4.  **Cross-Platform Testing (If Applicable):**
-    * Run and test the application on all target operating systems (Windows, macOS, Linux) to catch platform-specific issues (path separators, tool compatibility, UI rendering).
-5.  **Performance Testing:**
-    * Test adding and converting a large number of files to check for performance bottlenecks or excessive memory usage.
-
-This plan provides a roadmap for completing and refining the Qt6 GUI. Remember to prioritize the essential tasks, especially the backend logging refactoring, to get a fully functional baseline.
+## VI. Testing Strategy (Ongoing)
+Continue with a comprehensive testing approach:
+1. Component Testing: Test individual functions, especially new ones in conversions.py and utils.py.
+2. GUI Interaction Testing (Manual):
+    + Thoroughly test all UI elements: job/media selection, file adding (single, folder, recursive), filtering, table interactions (selection, context menu), output options, settings dialog.
+    + Verify dynamic UI updates (labels, button states, button text).
+3. Conversion Execution Testing:
+    + Test all defined job/media type combinations with valid sample files.
+    + Verify correct output files, output locations, and handling of overwrite/delete options.
+    + Confirm log messages are accurate and complete.
+4. Error Condition Testing (Manual):
+    + Invalid/corrupted input files.
+    + Missing external tools (temporarily rename one to test).
+    + Permissions issues (non-writable output/temp directories).
+    + Edge cases (paths with spaces, very large files, empty input folders).
+5. Cross-Platform Testing (If Applicable): Test on all target OS.
+6. Performance Testing: Test with a large number of files.
+    + This updated TODO list should provide a clear roadmap for the next stages of development!

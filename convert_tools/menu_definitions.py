@@ -1,101 +1,201 @@
 # convert_tools/menu_definitions.py
 """
-Defines the menu structure and conversion options for the tool.
-Includes separate display text for GUI dropdowns.
+Defines the job structure and conversion options for the tool,
+mapping them to conversion functions and UI elements.
 """
 import os
-
-# Import the conversion functions
 try:
+    # This import is primarily for type hinting or if we later want to
+    # store actual function references directly, though getattr() is safer for loose coupling.
     import conversions
 except ImportError:
-    print("ERROR: menu_definitions.py could not import conversions.py")
-    pass
+    print("ERROR: menu_definitions.py could not import conversions.py (this might be okay if only names are used)")
+    pass  # Allow to proceed if only function names are stored
 
+# --- NEW JOB-BASED DEFINITIONS ---
 
-# Menu data structure:
-# [Category, [
-#    [Number, CLI Text, GUI Text, [Input Formats], Output Format, Output Format2, Function]
-# ]]
-# GUI Text: Simplified text like "to CHD", "to ISO"
-menu_data = [
-    ["Nintendo GameCube / Nintendo Wii", [
-        ['10', "ISO to RVZ",        "to RVZ",                      ['iso'],               'rvz', None, conversions.convert_iso_to_rvz_routine],
-        ['11', "RVZ to ISO",        "to ISO",                      ['rvz'],               'iso', None, conversions.convert_rvz_to_iso_routine],
-        ['12', "7Z/ZIP/RAR to RVZ", "Extract and convert to RVZ",  ['7z', 'zip', 'rar'],  'rvz', None, conversions.convert_archive_to_rvz_routine],
-    ]],
-    ["Sony Playstation 1 / Sega Saturn / Sega CD", [
-        ['20', "ISO/CUE/IMG to CHD", "to CHD",                     ['iso', 'cue', 'img'], 'chd', None, conversions.convert_discimage_to_chd_routine],
-        ['21', "7Z/ZIP/RAR to CHD",  "Extract and convert to CHD", ['7z', 'zip', 'rar'],  'chd', None, conversions.convert_archive_to_chd_routine],
-        ['23', "CHD to CUE/BIN",     "to CUE/BIN",                 ['chd'],               'cue', 'bin', conversions.convert_chd_to_cuebin_routine],
-        ['24', "CHD to CD ISO",      "to CD ISO",                  ['chd'],               'iso', None, conversions.convert_chd_to_cdiso_routine],
-    ]],
-    ["Sega Dreamcast", [
-        ['30', "GDI/CUE to CHD",    "to CHD",                      ['gdi', 'cue'],        'chd', None, conversions.convert_discimage_to_chd_routine],
-        ['31', "7Z/ZIP/RAR to CHD", "Extract and convert to CHD",  ['7z', 'zip', 'rar'],  'chd', None, conversions.convert_archive_to_chd_routine],
-        ['32', "CHD to GDI",        "to GDI",                      ['chd'],               'gdi', None, conversions.convert_chd_to_gdi_routine],
-    ]],
-    ["Sony Playstation 2", [
-        ['40', "ISO to CHD",        "to CHD",                      ['iso'],               'chd', None, conversions.convert_discimage_to_chd_routine],
-        ['41', "7Z/ZIP/RAR to CHD", "Extract and convert to CHD",  ['7z', 'zip', 'rar'],  'chd', None, conversions.convert_archive_to_chd_routine],
-        ['42', "CSO to CHD",        "to CHD",                      ['cso'],               'chd', None, conversions.convert_cso_to_chd_routine],
-        ['24', "CHD to CD ISO",     "to CD ISO",                   ['chd'],               'iso', None, conversions.convert_chd_to_cdiso_routine],
-        ['24', "CHD to DVD ISO",    "to DVD ISO",                  ['chd'],               'iso', None, conversions.convert_chd_to_dvdiso_routine],
-    ]],
-    ["Playstation Portable", [
-        ['50', "ISO to CSO",        "to CSO",                      ['iso'],               'cso', None, conversions.convert_iso_to_cso_routine],
-        ['51', "7Z/ZIP/RAR to CSO", "Extract and convert to CSO",  ['7z', 'zip', 'rar'],  'cso', None, conversions.convert_archive_to_cso_routine],
-    ]],
-    ["Archiving", [
-        ['90', "ZIP/RAR to 7Z",     "Archive to 7Z",               ['zip', 'rar'],        '7z', None, conversions.convert_archive_to_7z_routine],
-    ]],
-    ["Audio", [
-        # These are handled specially and don't need GUI text here
-        ['80', "Audio to Audio (Specify Formats)", None, [], None, None, None],
-        ['81', "Folder to FLAC", None, [], 'flac', None, None],
-    ]],
+JOB_DEFINITIONS = [
+    {
+        "job_name": "Compress media",
+        "action_text": "COMPRESS",
+        "media_types": [
+            {
+                "media_name": "CD image",
+                "input_ext": ["iso", "img", "cue", "toc", "gdi", "7z", "zip", "rar"],
+                "output_ext": ["chd"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "compress_discimage_to_chd_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "DVD image",
+                "input_ext": ["iso", "7z", "zip", "rar", "gz"],
+                "output_ext": ["chd"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "compress_dvdimage_to_chd_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "GameCube/Wii",
+                "input_ext": ["iso", "gcz", "wia", "rvz", "7z", "zip", "rar"],
+                "output_ext": ["rvz", "gcz", "wia"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "compress_dolphin_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "Hard Disk image",
+                "input_ext": ["img", "7z", "zip", "rar"],
+                "output_ext": ["chd"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "compress_harddisk_to_chd_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "LaserDisc image",
+                "input_ext": ["raw", "7z", "zip", "rar"],
+                "output_ext": ["chd"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "compress_laserdisc_to_chd_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "Raw image",
+                "input_ext": ["img", "raw", "7z", "zip", "rar"],
+                "output_ext": ["chd"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "compress_raw_to_chd_routine",
+                "requires_output_folder": True,
+            }
+        ]
+    },
+    {
+        "job_name": "Extract media",
+        "action_text": "EXTRACT",
+        "media_types": [
+            {
+                "media_name": "CD image",
+                "input_ext": ["chd"],
+                "output_ext": ["cue", "toc", "gdi", "iso"],
+                "output_ext_secondary": ["bin", "bin", "bin", None],
+                "conversion_func_name": "extract_chd_to_cd_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "DVD image",
+                "input_ext": ["chd"],
+                "output_ext": ["iso"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "extract_chd_to_dvd_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "GameCube/Wii",
+                "input_ext": ["rvz", "gcz", "wia"],
+                "output_ext": ["iso"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "extract_dolphin_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "Hard Disk image",
+                "input_ext": ["chd"],
+                "output_ext": ["img"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "extract_chd_to_harddisk_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "LaserDisc image",
+                "input_ext": ["raw"],
+                "output_ext": ["iso"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "extract_chd_to_laserdisc_routine",
+                "requires_output_folder": True,
+            },
+            {
+                "media_name": "Raw image",
+                "input_ext": ["chd"],
+                "output_ext": ["img", "raw"],
+                "output_ext_secondary": None,
+                "conversion_func_name": "extract_chd_to_raw_routine",
+                "requires_output_folder": True,
+            }
+        ]
+    },
+    {
+        "job_name": "Get info from media",
+        "action_text": "GET INFO",
+        "media_types": [
+            {
+                "media_name": "CHD Info (CD/DVD/HD/LD)",
+                "input_ext": ["chd"],
+                "output_ext": [],  # No file output, text goes to log
+                "output_ext_secondary": None,
+                "action_text": "GET INFO",
+                "conversion_func_name": "get_chd_info_routine",
+                "requires_output_folder": False,  # No output folder needed
+            },
+            # # This job might not produce output files in the same way.
+            # # The 'conversion_func_name' would point to a new function in conversions.py
+            # # that runs e.g. 'chdman info ...' and returns the info string.
+            # # 'requires_output_folder' would likely be False.
+            # {
+            #     "media_name": "CHD info",
+            #     "input_ext": ["chd"],
+            #     "output_ext": [], # Or None, as it's info
+            #     "action_text": "GET INFO",
+            #     "conversion_func_name": "get_chd_info_routine", # Example new function
+            #     "requires_output_folder": False,
+            # }
+        ]
+    },
+    {
+        "job_name": "Verify media",
+        "action_text": "VERIFY",
+        "media_types": [
+            {
+                "media_name": "Verify CHD (CD/DVD/HD/LD)",
+                "input_ext": ["chd"],
+                "output_ext": [],  # No file output, result goes to log
+                "output_ext_secondary": None,
+                "action_text": "VERIFY MEDIA",
+                "conversion_func_name": "verify_chd_routine",
+                "requires_output_folder": False,  # No output folder needed
+            },
+            # Example for other verify types:
+            # {
+            #     "media_name": "Verify RVZ (if tool supports)",
+            #     "input_ext": ["rvz"],
+            #     "output_ext": [],
+            #     "action_text": "VERIFY MEDIA",
+            #     "conversion_func_name": "verify_rvz_routine", # Needs to be created
+            #     "requires_output_folder": False,
+            # }
+        ]
+    },
 ]
 
-def get_all_input_extensions():
-    """Extracts all unique possible input extensions from menu_data."""
+
+# --- Helper function to get all possible input extensions from JOB_DEFINITIONS ---
+def get_all_job_input_extensions():
+    """Retrieves a list of all unique input file extensions used across all defined jobs."""
     extensions = set()
-    for category, options in menu_data:
-        for option in options:
-            # Index 3 now holds the list of input formats
-            input_formats = option[3]
-            if input_formats:
-                for fmt in input_formats:
-                    extensions.add(fmt.lower())
-    return extensions
+    for job in JOB_DEFINITIONS:
+        for media_type in job.get("media_types", []):
+            for ext in media_type.get("input_ext", []):
+                extensions.add(ext.lower())
+    return list(extensions)
 
-VALID_INPUT_EXTENSIONS = get_all_input_extensions()
 
-def get_conversion_map():
-    """Creates a map of {choice_num: details} including GUI text."""
-    conv_map = {}
-    for category, options in menu_data:
-        for option in options:
-            # Unpack including the new GUI text at index 2
-            num, cli_text, gui_text, fmts_in, fmt_out, fmt_out2, func = option
-            conv_map[num] = {
-                'cli_text': cli_text,
-                'gui_text': gui_text, # Store the GUI text
-                'func': func,
-                'formats_in': fmts_in,
-                'format_out': fmt_out,
-                'format_out2': fmt_out2
-            }
-    return conv_map
+ALL_VALID_INPUT_EXTENSIONS = get_all_job_input_extensions()
 
-CONVERSION_MAP = get_conversion_map()
 
-# Function needed by CLI still
-def get_cli_menu_data():
-     """Returns data structured for the original CLI menu function."""
-     cli_map = {}
-     for category, options in menu_data:
-         for option in options:
-             num, cli_text, _, fmts_in, fmt_out, fmt_out2, func = option
-             cli_map[num] = {'text': cli_text, 'func': func, 'formats_in': fmts_in, 'format_out': fmt_out, 'format_out2': fmt_out2}
-     return menu_data, cli_map
-
+def get_job_media_details(job_name_selected, media_name_selected):
+    """Retrieves the details for a specific job and media type."""
+    for job in JOB_DEFINITIONS:
+        if job["job_name"] == job_name_selected:
+            for media_type in job["media_types"]:
+                if media_type["media_name"] == media_name_selected:
+                    return media_type
+    return None
