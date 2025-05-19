@@ -7,7 +7,7 @@ This document tracks theremaining tasks, and future plans for the Retro Retro Co
     + Next: Thorough testing across all conversion routines and error conditions to ensure all tool outputs (stdout/stderr) and internal messages are captured comprehensively and displayed clearly and promptly in the GUI log. Consider if any specific errors warrant a dialog box in addition to a log message.
 + Further testing with all tools to make sure they work as expected.
 
-## III. Next Steps / Remaining Tasks
+## II. Next Steps / Remaining Tasks
 + Implement "Get info from media" & "Verify media" Job Types:
     + Define these new jobs and their associated media types in menu_definitions.py.
     + Create new corresponding functions in conversions.py (e.g., get_media_info_routine, verify_media_routine).
@@ -30,7 +30,7 @@ This document tracks theremaining tasks, and future plans for the Retro Retro Co
 
 + Expand OS to macos and linux
 
-+ New Feature Ideas:
-    + Queue Management (pause, resume, reorder).
-    + Plugin System for new formats/tools.
-    + .m3u creator
+## II. New Far Future Ideas:
++ Queue Management (pause, resume, reorder).
++ Plugin System for new formats/tools.
++ .m3u creator
