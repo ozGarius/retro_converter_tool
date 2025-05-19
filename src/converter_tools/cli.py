@@ -1,4 +1,4 @@
-# convert_tools/cli.py
+# converter_tools/cli.py
 """
 Contains the command-line interface logic for the converter tool,
 restructured to follow a job-based flow similar to the GUI.
@@ -226,10 +226,10 @@ if __name__ == '__main__':
     # This allows running cli.py directly for testing
     # Ensure paths are set up if run this way
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(script_dir)  # Assuming convert_tools is in project_root
+    project_root = os.path.dirname(script_dir)  # Assuming converter_tools is in project_root
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
-    if script_dir not in sys.path:  # Ensure convert_tools itself is also in path for its imports
+    if script_dir not in sys.path:  # Ensure converter_tools itself is also in path for its imports
         sys.path.insert(0, script_dir)
 
     # Re-import with adjusted path if necessary for direct run

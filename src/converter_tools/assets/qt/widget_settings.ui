@@ -20,7 +20,7 @@
       <bool>true</bool>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="general_tab">
       <attribute name="title">
@@ -45,7 +45,7 @@
             <item>
              <widget class="QLabel" name="temp_dir_label">
               <property name="text">
-               <string>Main Temp Directory:</string>
+               <string>TEMP folder:</string>
               </property>
              </widget>
             </item>
@@ -774,43 +774,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="dolphintool_rvz_blocksize_combo_box">
-               <item>
-                <property name="text">
-                 <string>32 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>64 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>128 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>256 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>512 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>1 MiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>2 MiB</string>
-                </property>
-               </item>
-              </widget>
+              <widget class="QComboBox" name="dolphintool_rvz_blocksize_combo_box"/>
              </item>
              <item>
               <widget class="QLabel" name="dolphintool_rvz_blocksize_default_label">
@@ -831,33 +795,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="dolphintool_rvz_compression_combo_box">
-               <item>
-                <property name="text">
-                 <string>No compression</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>bzip2 (slow)</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>LZMA (slow)</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>LZMA2 (slow)</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>Zstandard (default)</string>
-                </property>
-               </item>
-              </widget>
+              <widget class="QComboBox" name="dolphintool_rvz_compression_combo_box"/>
              </item>
              <item>
               <widget class="QLabel" name="dolphintool_rvz_compression_default_label">
@@ -929,33 +867,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="dolphintool_wia_compression_combo_box">
-               <item>
-                <property name="text">
-                 <string>No compression</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>Purge</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>bzip2 (slow)</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>LZMA (slow)</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>LZMA2 (slow)</string>
-                </property>
-               </item>
-              </widget>
+              <widget class="QComboBox" name="dolphintool_wia_compression_combo_box"/>
              </item>
              <item>
               <widget class="QLabel" name="dolphintool_wia_compression_default_layout">
@@ -1027,28 +939,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="dolphintool_gcz_blocksize_combo_box">
-               <item>
-                <property name="text">
-                 <string>32 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>64 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>128 KiB</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>256 KiB</string>
-                </property>
-               </item>
-              </widget>
+              <widget class="QComboBox" name="dolphintool_gcz_blocksize_combo_box"/>
              </item>
              <item>
               <widget class="QLabel" name="dolphintool_gcz_blocksize_default_label">

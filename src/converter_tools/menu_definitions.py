@@ -1,4 +1,4 @@
-# convert_tools/menu_definitions.py
+# converter_tools/menu_definitions.py
 """
 Defines the job structure and conversion options for the tool,
 mapping them to conversion functions and UI elements.
