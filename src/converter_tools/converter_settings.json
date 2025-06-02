@@ -1,6 +1,7 @@
 {
     "COPY_LOCALLY": true,
     "MAIN_TEMP_DIR": "B:\\temp",
+    "DEBUG_MODE": true,
     "SUBPROCESS_TIMEOUT": 3600,
     "CHDMAN_NUM_PROCESSORS_MODE": "auto",
     "CHDMAN_NUM_PROCESSORS_MANUAL": 21,

@@ -7,6 +7,7 @@ import shutil
 import config  # Now contains all the detailed settings
 import utils
 
+
 # --- Internal Helper for Archive Handling in Compression Routines ---
 def _handle_archive_input_for_compression(processing_path, base_temp_dir,
                                           supported_media_extensions, output_signal=None, error_signal=None):
@@ -78,8 +79,8 @@ def _add_chdman_common_args(command_list):
         command_list.extend(
             ["--numprocessors", str(config.CHDMAN_NUM_PROCESSORS_MANUAL)])
 
-# --- COMPRESSION ROUTINES ---
 
+# --- COMPRESSION ROUTINES ---
 def compress_discimage_to_chd_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None, **kwargs):
     utils._emit_or_print(
         f">> Starting CD Image to CHD for: \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="cyan")
@@ -94,8 +95,10 @@ def compress_discimage_to_chd_routine(processing_path, temp_dir, name, output_si
 
     # Verify actual_media_path before calling the tool
     if not os.path.isfile(actual_media_path):
-        utils._emit_or_print(f"ERROR: Input media file for CHDMAN (CD) not found at: {actual_media_path}", error_signal, is_error=True)
-        if sub_temp_dir: shutil.rmtree(sub_temp_dir, ignore_errors=True)
+        utils._emit_or_print(
+            f"ERROR: Input media file for CHDMAN (CD) not found at: {actual_media_path}", error_signal, is_error=True)
+        if sub_temp_dir:
+            shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
 
     utils._emit_or_print(
@@ -134,8 +137,10 @@ def compress_dvdimage_to_chd_routine(processing_path, temp_dir, name, output_sig
         return False
 
     if not os.path.isfile(actual_media_path):
-        utils._emit_or_print(f"ERROR: Input media file for CHDMAN (DVD) not found at: {actual_media_path}", error_signal, is_error=True)
-        if sub_temp_dir: shutil.rmtree(sub_temp_dir, ignore_errors=True)
+        utils._emit_or_print(
+            f"ERROR: Input media file for CHDMAN (DVD) not found at: {actual_media_path}", error_signal, is_error=True)
+        if sub_temp_dir:
+            shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
 
     utils._emit_or_print(
@@ -176,9 +181,11 @@ def compress_dolphin_routine(processing_path, temp_dir, name, output_signal=None
     # ** ADDED CHECK **
     # Verify that the actual_media_path (which will be the input to DolphinTool) exists before proceeding
     if not os.path.isfile(actual_media_path):
-        utils._emit_or_print(f"ERROR: Input media file for DolphinTool not found at: {actual_media_path}", error_signal, is_error=True)
-        utils._emit_or_print(f"       (Original input was: {processing_path})", error_signal, is_error=True)
-        if sub_temp_dir: # Cleanup archive extraction temp if it exists
+        utils._emit_or_print(
+            f"ERROR: Input media file for DolphinTool not found at: {actual_media_path}", error_signal, is_error=True)
+        utils._emit_or_print(
+            f"       (Original input was: {processing_path})", error_signal, is_error=True)
+        if sub_temp_dir:  # Cleanup archive extraction temp if it exists
             shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
 
@@ -235,8 +242,10 @@ def compress_harddisk_to_chd_routine(processing_path, temp_dir, name, output_sig
         return False
 
     if not os.path.isfile(actual_media_path):
-        utils._emit_or_print(f"ERROR: Input media file for CHDMAN (HD) not found at: {actual_media_path}", error_signal, is_error=True)
-        if sub_temp_dir: shutil.rmtree(sub_temp_dir, ignore_errors=True)
+        utils._emit_or_print(
+            f"ERROR: Input media file for CHDMAN (HD) not found at: {actual_media_path}", error_signal, is_error=True)
+        if sub_temp_dir:
+            shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
 
     utils._emit_or_print(
@@ -279,10 +288,12 @@ def compress_laserdisc_to_chd_routine(processing_path, temp_dir, name, output_si
         if sub_temp_dir:
             shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
-    
+
     if not os.path.isfile(actual_media_path):
-        utils._emit_or_print(f"ERROR: Input media file for CHDMAN (LD) not found at: {actual_media_path}", error_signal, is_error=True)
-        if sub_temp_dir: shutil.rmtree(sub_temp_dir, ignore_errors=True)
+        utils._emit_or_print(
+            f"ERROR: Input media file for CHDMAN (LD) not found at: {actual_media_path}", error_signal, is_error=True)
+        if sub_temp_dir:
+            shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
 
     utils._emit_or_print(
@@ -326,15 +337,17 @@ def compress_raw_to_chd_routine(processing_path, temp_dir, name, output_signal=N
         return False
 
     if not os.path.isfile(actual_media_path):
-        utils._emit_or_print(f"ERROR: Input media file for CHDMAN (Raw) not found at: {actual_media_path}", error_signal, is_error=True)
-        if sub_temp_dir: shutil.rmtree(sub_temp_dir, ignore_errors=True)
+        utils._emit_or_print(
+            f"ERROR: Input media file for CHDMAN (Raw) not found at: {actual_media_path}", error_signal, is_error=True)
+        if sub_temp_dir:
+            shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
 
     utils._emit_or_print(
         f">> Compressing Raw Image to CHD: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_chd_path = os.path.join(temp_dir, f"{name}.chd")
     command = [config.TOOL_CHDMAN, 'createhd', '-i', actual_media_path,
-               '-o', output_chd_path] 
+               '-o', output_chd_path]
 
     _add_chdman_common_args(command)
     if config.CHDMAN_RAW_USE_CUSTOM_HUNKS and config.CHDMAN_RAW_HUNKS > 0:
@@ -365,15 +378,17 @@ def compress_iso_to_cso_routine(processing_path, temp_dir, name, output_signal=N
         return False
 
     if not os.path.isfile(actual_media_path):
-        utils._emit_or_print(f"ERROR: Input media file for MAXCSO not found at: {actual_media_path}", error_signal, is_error=True)
-        if sub_temp_dir: shutil.rmtree(sub_temp_dir, ignore_errors=True)
+        utils._emit_or_print(
+            f"ERROR: Input media file for MAXCSO not found at: {actual_media_path}", error_signal, is_error=True)
+        if sub_temp_dir:
+            shutil.rmtree(sub_temp_dir, ignore_errors=True)
         return False
-        
+
     utils._emit_or_print(
         f">> Compressing ISO to CSO: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_cso_path = os.path.join(temp_dir, f"{name}.cso")
     command = [config.TOOL_MAXCSO, actual_media_path,
-               '--output', output_cso_path] 
+               '--output', output_cso_path]
 
     maxcso_success = utils.run_command(
         command, output_signal=output_signal, error_signal=error_signal)
@@ -393,13 +408,13 @@ def compress_iso_to_cso_routine(processing_path, temp_dir, name, output_signal=N
         return False
     return True
 
-# --- EXTRACTION ROUTINES ---
 
+# --- EXTRACTION ROUTINES ---
 def extract_chd_to_cd_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None, target_format_from_worker="cue", **kwargs):
     utils._emit_or_print(
         f">> Verifying CHD (CD): \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="green")
     verify_command = [config.TOOL_CHDMAN, 'verify', '-i', processing_path]
-    if config.CHDMAN_VERIFY_FIX: 
+    if config.CHDMAN_VERIFY_FIX:
         verify_command.append('--fix')
     if not utils.run_command(verify_command, output_signal=output_signal, error_signal=error_signal):
         utils._emit_or_print("WARNING: CHD verification failed or found errors. Attempting extraction anyway.",
@@ -412,7 +427,7 @@ def extract_chd_to_cd_routine(processing_path, temp_dir, name, output_signal=Non
     command = [config.TOOL_CHDMAN, 'extractcd', '-i',
                processing_path, '-o', output_base_name]
 
-    _add_chdman_common_args(command) 
+    _add_chdman_common_args(command)
 
     if not utils.run_command(command, output_signal=output_signal, error_signal=error_signal):
         return False
@@ -468,10 +483,12 @@ def extract_dolphin_routine(processing_path, temp_dir, name, output_signal=None,
     output_file_path = os.path.join(temp_dir, f"{name}.{actual_target_format}")
     command = [config.TOOL_DOLPHINTOOL, 'convert',
                f'--input={processing_path}', f'--output={output_file_path}', f'--format={actual_target_format}']
-    
+
     # ** ADDED CHECK **
-    if not os.path.isfile(processing_path): # Check the source path for DolphinTool extract
-        utils._emit_or_print(f"ERROR: Input file for DolphinTool extract not found at: {processing_path}", error_signal, is_error=True)
+    # Check the source path for DolphinTool extract
+    if not os.path.isfile(processing_path):
+        utils._emit_or_print(
+            f"ERROR: Input file for DolphinTool extract not found at: {processing_path}", error_signal, is_error=True)
         return False
 
     if not utils.run_command(command, output_signal=output_signal, error_signal=error_signal):
@@ -520,7 +537,7 @@ def extract_chd_to_laserdisc_routine(processing_path, temp_dir, name, output_sig
     _add_chdman_common_args(command)
     if not utils.run_command(command, output_signal=output_signal, error_signal=error_signal):
         return False
-    if not os.path.exists(output_file_base) or os.path.getsize(output_file_base) == 0: 
+    if not os.path.exists(output_file_base) or os.path.getsize(output_file_base) == 0:
         utils._emit_or_print(
             f"ERROR: Output LaserDisc file \"{os.path.basename(output_file_base)}\" was not created or empty.", error_signal, is_error=True)
         return False
@@ -544,8 +561,8 @@ def extract_archive_to_folder_routine(processing_path, temp_dir, name, output_si
         f"Archive \"{os.path.basename(processing_path)}\" extracted successfully to \"{temp_dir}\".", output_signal, fallback_color_code="green")
     return True
 
-# --- ARCHIVE TO FORMAT CONVERSIONS ---
 
+# --- ARCHIVE TO FORMAT CONVERSIONS ---
 def convert_archive_to_7z_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None, **kwargs):
     utils._emit_or_print(
         f">> Converting archive {os.path.basename(processing_path)} to 7Z format...", output_signal, fallback_color_code="cyan")
@@ -565,14 +582,14 @@ def convert_archive_to_7z_routine(processing_path, temp_dir, name, output_signal
             "No content found after extraction to re-compress to 7Z.", error_signal, is_error=True)
         return False
     command = [config.TOOL_7ZA, 'a', '-t7z', '-mx9', '-md=128m',
-               output_7z_path, '.'] 
+               output_7z_path, '.']
     if not utils.run_command(command, cwd=temp_dir, output_signal=output_signal, error_signal=error_signal):
         return False
     if not os.path.exists(output_7z_path) or os.path.getsize(output_7z_path) == 0:
         utils._emit_or_print(
             f"ERROR: Output 7Z \"{os.path.basename(output_7z_path)}\" not created or empty.", error_signal, is_error=True)
         return False
-    if config.VALIDATE_FILE: 
+    if config.VALIDATE_FILE:
         utils._emit_or_print(">> Validating new 7Z archive...",
                              output_signal, fallback_color_code="green")
         if not utils.run_command([config.TOOL_7ZA, 't', output_7z_path], output_signal=output_signal, error_signal=error_signal):
@@ -584,8 +601,8 @@ def convert_archive_to_7z_routine(processing_path, temp_dir, name, output_signal
                                  output_signal, fallback_color_code="green")
     return True
 
-# --- NEW INFO/VERIFY ROUTINES ---
 
+# --- NEW INFO/VERIFY ROUTINES ---
 def get_chd_info_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None, **kwargs):
     """Gets information from a CHD file using 'chdman info'."""
     utils._emit_or_print(

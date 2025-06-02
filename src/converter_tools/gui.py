@@ -15,17 +15,19 @@ if script_dir not in sys.path:
 # Import the actual run_gui function from gui_main_window.py
 # This makes it available as converter_tools.gui.run_gui() for converter.py
 try:
-    from .gui_main_window import run_gui as actual_run_gui # Rename to avoid conflict
+    from .gui_main_window import run_gui as actual_run_gui  # Rename to avoid conflict
 except ImportError as e:
-    print(f"FATAL ERROR: Could not import 'run_gui' from 'gui_main_window'.")
-    print(f"Ensure 'gui_main_window.py' exists in the '{script_dir}' directory.")
+    print("FATAL ERROR: Could not import 'run_gui' from 'gui_main_window'.")
+    print(
+        f"Ensure 'gui_main_window.py' exists in the '{script_dir}' directory.")
     print(f"Python's sys.path: {sys.path}")
     print(f"Details: {e}")
     try:
         from PySide6.QtWidgets import QApplication, QMessageBox
         app = QApplication.instance()
-        if not app: app = QApplication(sys.argv)
-        QMessageBox.critical(None, "Import Error", 
+        if not app:
+            app = QApplication(sys.argv)
+        QMessageBox.critical(None, "Import Error",
                              f"Failed to load GUI components from 'gui_main_window.py'.\n\nDetails: {e}\n\n"
                              f"Please check installation and file integrity.")
     except Exception as qe:
@@ -34,6 +36,7 @@ except ImportError as e:
 except Exception as e_unexpected:
     print(f"FATAL UNEXPECTED ERROR during import: {e_unexpected}")
     sys.exit(1)
+
 
 def run_gui():
     """
@@ -44,8 +47,9 @@ def run_gui():
     actual_run_gui()
     print("DEBUG (gui.py launcher): actual_run_gui() has completed. Application should be closing.")
 
+
 if __name__ == "__main__":
     # This block is executed if gui.py is run directly as a script.
     print("DEBUG (gui.py launcher): Running GUI directly from __main__...")
-    run_gui() # Call the wrapper function
+    run_gui()  # Call the wrapper function
     print("DEBUG (gui.py launcher): run_gui() has completed in __main__. Python should be exiting now.")
