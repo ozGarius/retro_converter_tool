@@ -7,7 +7,7 @@ import shutil
 import glob
 import time
 import tempfile
-from . import config
+import config
 import re
 
 try:
