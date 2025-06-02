@@ -184,16 +184,6 @@
        <item>
         <layout class="QHBoxLayout" name="output_type_layout">
          <item>
-          <widget class="QCheckBox" name="output_same_folder_checkbox">
-           <property name="text">
-            <string>Output in same folder</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
           <spacer name="horizontalSpacer_output_type">
            <property name="orientation">
             <enum>Qt::Orientation::Horizontal</enum>
@@ -226,6 +216,34 @@
         </layout>
        </item>
        <item>
+        <layout class="QFormLayout" name="formLayout_2">
+         <item row="0" column="0">
+          <widget class="QCheckBox" name="overwrite_files_checkbox">
+           <property name="text">
+            <string>Overwrite an existing file</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QCheckBox" name="delete_input_checkbox">
+           <property name="text">
+            <string>Delete input files after completing job</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QCheckBox" name="output_same_folder_checkbox">
+           <property name="text">
+            <string>Output in same folder</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="path_selection_layout">
          <item>
           <widget class="QPushButton" name="select_output_folder_button">
@@ -241,24 +259,6 @@
            </property>
            <property name="placeholderText">
             <string>Path to output folder...</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QFormLayout" name="formLayout_2">
-         <item row="0" column="0">
-          <widget class="QCheckBox" name="overwrite_files_checkbox">
-           <property name="text">
-            <string>Overwrite an existing file</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QCheckBox" name="delete_input_checkbox">
-           <property name="text">
-            <string>Delete input files after completing job</string>
            </property>
           </widget>
          </item>
@@ -443,14 +443,14 @@
          </item>
          <item>
           <widget class="QPushButton" name="clear_log_button">
-           <property name="visible">
-            <bool>false</bool>
-           </property>
            <property name="text">
             <string>Clear Log</string>
            </property>
            <property name="flat">
             <bool>true</bool>
+           </property>
+           <property name="visible">
+            <bool>false</bool>
            </property>
           </widget>
          </item>
@@ -492,7 +492,7 @@
      <x>0</x>
      <y>0</y>
      <width>859</width>
-     <height>33</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -505,7 +505,7 @@
    </widget>
    <widget class="QMenu" name="menuJob">
     <property name="title">
-     <string>Concurrent &amp;Job</string>
+     <string>&amp;Job</string>
     </property>
    </widget>
    <widget class="QMenu" name="menuAbout">

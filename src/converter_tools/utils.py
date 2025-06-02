@@ -599,32 +599,49 @@ def _get_gdi_dependencies(gdi_file_path):
         with open(gdi_file_path, 'r', encoding='utf-8', errors='replace') as f:
             # The first line usually contains the number of tracks, which we can skip or parse if needed.
             # For now, we'll just iterate through all lines.
-            for line in f:
-                line = line.strip()
-                parts = line.split()
-                
-                # GDI track lines typically start with a track number (integer)
-                # and have the filename as the 5th element (index 4).
-                # Example: 1 0 4 2352 track01.bin 0
-                if len(parts) >= 5 and parts[0].isdigit():
-                    filename = parts[4]
-                    # Filenames in GDI are not typically quoted, but we strip them just in case.
-                    filename = filename.strip('"') 
+            for line_content in f:
+                line = line_content.strip()
+
+                # Regex to capture essential parts, focusing on robust filename extraction.
+                # Groups: 1=track_num_str, 3=filename_quoted_content, 4=filename_unquoted
+                match = re.match(r'^\s*(\d+)\s+\S+\s+\S+\s+\S+\s+("([^"]+)"|([^\s"]+))(?:\s+.*)?$', line)
+
+                if match:
+                    # track_num_str = match.group(1) # We don't strictly need the track number itself
+                    quoted_filename_content = match.group(3)
+                    unquoted_filename = match.group(4)
+
+                    filename = ""
+                    if quoted_filename_content is not None:
+                        filename = quoted_filename_content
+                    elif unquoted_filename is not None:
+                        filename = unquoted_filename
+                    else:
+                        # This case should ideally not be reached if regex matches and is well-formed.
+                        _emit_or_print(f"Could not parse filename from GDI line: {line}", signal=None, is_error=True) # Assuming no signal available here
+                        continue
                     
-                    # Construct absolute path
+                    # The regex groups already handle stripping the quotes.
+                    # Clean any potential leading/trailing whitespace from the extracted filename.
+                    filename = filename.strip()
+
+                    if not filename: # Skip if filename ended up empty after strip
+                        _emit_or_print(f"Empty filename parsed from GDI line: {line}", signal=None, is_error=True)
+                        continue
+
                     abs_path = os.path.join(gdi_dir, filename)
                     dependencies.append(os.path.normpath(abs_path))
-                # Silently ignore lines that don't match the expected format
-                # (e.g., the first line with track count, or comments if any)
+                # Silently ignore lines that don't match the expected GDI track format
+                # (e.g., the first line with track count, comments, or malformed lines)
 
     except FileNotFoundError:
-        _emit_or_print(f"ERROR: GDI file not found: {gdi_file_path}", is_error=True)
+        _emit_or_print(f"ERROR: GDI file not found: {gdi_file_path}", signal=None, is_error=True)
         return []
     except IOError as e:
-        _emit_or_print(f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", is_error=True)
+        _emit_or_print(f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
     except Exception as e:
-        _emit_or_print(f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", is_error=True)
+        _emit_or_print(f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
         
     return dependencies
