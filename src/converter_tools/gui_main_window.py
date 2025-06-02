@@ -33,10 +33,10 @@ except ImportError as e:
     sys.exit(1)
 
 # Core application modules
-import config
-import utils
-import conversions
-import menu_definitions
+from . import config
+from . import utils
+from . import conversions
+from . import menu_definitions
 
 # GUI components from other files in this package
 from .gui_settings import SettingsDialog
