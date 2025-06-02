@@ -7,7 +7,7 @@ import shutil
 import glob
 import time
 import tempfile
-import config
+from . import config
 import re
 
 try:
@@ -363,9 +363,38 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
             else:
                 shutil.copy2(file_path, target_copy_path)
             path_to_process_in_temp = target_copy_path
+
+            # Check for .cue or .gdi files to copy dependencies
+            _, file_ext = os.path.splitext(file_path)
+            file_ext = file_ext.lower()
+
+            dependencies_to_copy = []
+            if file_ext == '.cue':
+                dependencies_to_copy = _get_cue_dependencies(file_path)
+            elif file_ext == '.gdi':
+                dependencies_to_copy = _get_gdi_dependencies(file_path)
+
+            for dep_path in dependencies_to_copy:
+                dep_filename = os.path.basename(dep_path)
+                temp_dep_dest_path = os.path.join(temp_path_for_this_file, dep_filename)
+                try:
+                    if not os.path.exists(dep_path):
+                        _emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.", 
+                                       error_signal, fallback_color_code="yellow")
+                        continue # Skip to next dependency
+
+                    _emit_or_print(f">> Copying dependent file \"{dep_filename}\" to \"{temp_dep_dest_path}\"", 
+                                   output_signal, fallback_color_code="green")
+                    shutil.copy2(dep_path, temp_dep_dest_path)
+                except Exception as dep_e:
+                    _emit_or_print(f"ERROR: Failed to copy dependent file \"{dep_filename}\" to temp: {dep_e}", 
+                                   error_signal, is_error=True)
+                    # Decide if this error should halt the entire process.
+                    # For now, we log and continue, the main conversion might fail later.
+
         except Exception as e:
             _emit_or_print(
-                f"ERROR: Failed to copy \"{file_name_base_with_ext}\" to temp: {e}", error_signal, is_error=True)
+                f"ERROR: Failed to copy \"{file_name_base_with_ext}\" or its dependencies to temp: {e}", error_signal, is_error=True)
             cleanup(temp_path_for_this_file,
                     output_signal=output_signal, error_signal=error_signal)
             return False
@@ -514,3 +543,88 @@ def print_help(formats_in, format_out, format_out2=None):
     _emit_or_print(
         "CLI Help Text Placeholder - Retain your original help text here.", fallback_color_code="cyan")
     pass
+
+
+def _get_cue_dependencies(cue_file_path):
+    """
+    Parses a .cue file and returns a list of absolute paths to dependent files.
+    """
+    dependencies = []
+    cue_dir = os.path.dirname(cue_file_path)
+
+    try:
+        with open(cue_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("FILE"):
+                    # Try to extract filename using regex, handling quotes
+                    match = re.search(r'FILE\s+"?([^"]+)"?\s+\w+', line)
+                    if match:
+                        filename = match.group(1)
+                        # Construct absolute path
+                        abs_path = os.path.join(cue_dir, filename)
+                        dependencies.append(os.path.normpath(abs_path))
+                    else:
+                        # Fallback for lines that might not have quotes but are valid
+                        parts = line.split(maxsplit=2)
+                        if len(parts) > 1:
+                            # Remove potential surrounding quotes manually if regex failed
+                            filename = parts[1].strip('"')
+                            abs_path = os.path.join(cue_dir, filename)
+                            dependencies.append(os.path.normpath(abs_path))
+                        else:
+                            _emit_or_print(f"Could not parse FILE line in CUE: {line}", is_error=True)
+                            
+    except FileNotFoundError:
+        _emit_or_print(f"ERROR: CUE file not found: {cue_file_path}", is_error=True)
+        return []
+    except IOError as e:
+        _emit_or_print(f"ERROR: Could not read CUE file: {cue_file_path} - {e}", is_error=True)
+        return []
+    except Exception as e:
+        _emit_or_print(f"ERROR: Unexpected error processing CUE file: {cue_file_path} - {e}", is_error=True)
+        return []
+        
+    return dependencies
+
+
+def _get_gdi_dependencies(gdi_file_path):
+    """
+    Parses a .gdi file and returns a list of absolute paths to dependent track files.
+    """
+    dependencies = []
+    gdi_dir = os.path.dirname(gdi_file_path)
+
+    try:
+        with open(gdi_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            # The first line usually contains the number of tracks, which we can skip or parse if needed.
+            # For now, we'll just iterate through all lines.
+            for line in f:
+                line = line.strip()
+                parts = line.split()
+                
+                # GDI track lines typically start with a track number (integer)
+                # and have the filename as the 5th element (index 4).
+                # Example: 1 0 4 2352 track01.bin 0
+                if len(parts) >= 5 and parts[0].isdigit():
+                    filename = parts[4]
+                    # Filenames in GDI are not typically quoted, but we strip them just in case.
+                    filename = filename.strip('"') 
+                    
+                    # Construct absolute path
+                    abs_path = os.path.join(gdi_dir, filename)
+                    dependencies.append(os.path.normpath(abs_path))
+                # Silently ignore lines that don't match the expected format
+                # (e.g., the first line with track count, or comments if any)
+
+    except FileNotFoundError:
+        _emit_or_print(f"ERROR: GDI file not found: {gdi_file_path}", is_error=True)
+        return []
+    except IOError as e:
+        _emit_or_print(f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", is_error=True)
+        return []
+    except Exception as e:
+        _emit_or_print(f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", is_error=True)
+        return []
+        
+    return dependencies
