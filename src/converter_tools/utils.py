@@ -68,7 +68,7 @@ def check_tools_exist(tools_list):
         _emit_or_print(
             "Ensure 'converter_tools' folder is in the same directory and contains all executables.", is_error=True)
         _emit_or_print(
-            f"Expected tools directory: {config.settings.TOOLS_DIR}", is_error=True)
+            f"Expected tools directory: {config.TOOLS_DIR}", is_error=True)
         return False
     return True
 
@@ -295,11 +295,11 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                     _emit_or_print(
                         f"WARNING: send2trash failed for \"{file_to_delete_path}\": {e_s2t}. Trying next method.", error_signal, fallback_color_code="yellow")
 
-            if not deleted_successfully_to_recycle and os.name == 'nt' and os.path.exists(config.settings.TOOL_RECYCLE):
+            if not deleted_successfully_to_recycle and os.name == 'nt' and os.path.exists(config.TOOL_RECYCLE):
                 _emit_or_print(
                     f">> Attempting to use recycle.exe for \"{file_to_delete_path}\"", output_signal, fallback_color_code="green")
                 recycle_success = run_command(
-                    [config.settings.TOOL_RECYCLE, '-f', file_to_delete_path], output_signal=output_signal, error_signal=error_signal)
+                    [config.TOOL_RECYCLE, '-f', file_to_delete_path], output_signal=output_signal, error_signal=error_signal)
                 if recycle_success:
                     _emit_or_print(
                         f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin via recycle.exe.", output_signal)
@@ -323,7 +323,7 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
 def extract_archive(archive_path, output_dir, output_signal=None, error_signal=None):
     _emit_or_print(f">> Extracting: \"{os.path.basename(archive_path)}\" to \"{output_dir}\"",
                    output_signal, fallback_color_code="green")
-    command = [config.settings.TOOL_7ZA, 'x', archive_path, f'-o{output_dir}', '-y']
+    command = [config.TOOL_7ZA, 'x', archive_path, f'-o{output_dir}', '-y']
     return run_command(command, output_signal=output_signal, error_signal=error_signal)
 
 
@@ -379,15 +379,15 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
                 temp_dep_dest_path = os.path.join(temp_path_for_this_file, dep_filename)
                 try:
                     if not os.path.exists(dep_path):
-                        _emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.", 
+                        _emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.",
                                        error_signal, fallback_color_code="yellow")
                         continue # Skip to next dependency
 
-                    _emit_or_print(f">> Copying dependent file \"{dep_filename}\" to \"{temp_dep_dest_path}\"", 
+                    _emit_or_print(f">> Copying dependent file \"{dep_filename}\" to \"{temp_dep_dest_path}\"",
                                    output_signal, fallback_color_code="green")
                     shutil.copy2(dep_path, temp_dep_dest_path)
                 except Exception as dep_e:
-                    _emit_or_print(f"ERROR: Failed to copy dependent file \"{dep_filename}\" to temp: {dep_e}", 
+                    _emit_or_print(f"ERROR: Failed to copy dependent file \"{dep_filename}\" to temp: {dep_e}",
                                    error_signal, is_error=True)
                     # Decide if this error should halt the entire process.
                     # For now, we log and continue, the main conversion might fail later.
@@ -574,7 +574,7 @@ def _get_cue_dependencies(cue_file_path):
                             dependencies.append(os.path.normpath(abs_path))
                         else:
                             _emit_or_print(f"Could not parse FILE line in CUE: {line}", is_error=True)
-                            
+
     except FileNotFoundError:
         _emit_or_print(f"ERROR: CUE file not found: {cue_file_path}", is_error=True)
         return []
@@ -584,7 +584,7 @@ def _get_cue_dependencies(cue_file_path):
     except Exception as e:
         _emit_or_print(f"ERROR: Unexpected error processing CUE file: {cue_file_path} - {e}", is_error=True)
         return []
-        
+
     return dependencies
 
 
@@ -620,7 +620,7 @@ def _get_gdi_dependencies(gdi_file_path):
                         # This case should ideally not be reached if regex matches and is well-formed.
                         _emit_or_print(f"Could not parse filename from GDI line: {line}", signal=None, is_error=True) # Assuming no signal available here
                         continue
-                    
+
                     # The regex groups already handle stripping the quotes.
                     # Clean any potential leading/trailing whitespace from the extracted filename.
                     filename = filename.strip()
@@ -643,5 +643,5 @@ def _get_gdi_dependencies(gdi_file_path):
     except Exception as e:
         _emit_or_print(f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
-        
+
     return dependencies

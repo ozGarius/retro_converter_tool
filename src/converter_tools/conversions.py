@@ -104,7 +104,7 @@ def compress_discimage_to_chd_routine(processing_path, temp_dir, name, output_si
     utils._emit_or_print(
         f">> Compressing to CHD: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_chd_path = os.path.join(temp_dir, f"{name}.chd")
-    command = [config.settings.TOOL_CHDMAN, 'createcd', '-i',
+    command = [config.TOOL_CHDMAN, 'createcd', '-i',
                actual_media_path, '-o', output_chd_path]
 
     _add_chdman_common_args(command)
@@ -146,7 +146,7 @@ def compress_dvdimage_to_chd_routine(processing_path, temp_dir, name, output_sig
     utils._emit_or_print(
         f">> Compressing to DVD CHD: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_chd_path = os.path.join(temp_dir, f"{name}.chd")
-    command = [config.settings.TOOL_CHDMAN, 'createdvd', '-i',
+    command = [config.TOOL_CHDMAN, 'createdvd', '-i',
                actual_media_path, '-o', output_chd_path]
 
     _add_chdman_common_args(command)
@@ -193,7 +193,7 @@ def compress_dolphin_routine(processing_path, temp_dir, name, output_signal=None
     utils._emit_or_print(
         f">> Compressing to {output_ext.upper()}: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_file_path = os.path.join(temp_dir, f"{name}.{output_ext}")
-    command = [config.settings.TOOL_DOLPHINTOOL, 'convert',
+    command = [config.TOOL_DOLPHINTOOL, 'convert',
                f'--input={actual_media_path}', f'--output={output_file_path}', f'--format={output_ext}']
 
     if output_ext == 'rvz':
@@ -251,7 +251,7 @@ def compress_harddisk_to_chd_routine(processing_path, temp_dir, name, output_sig
     utils._emit_or_print(
         f">> Compressing to Hard Disk CHD: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_chd_path = os.path.join(temp_dir, f"{name}.chd")
-    command = [config.settings.TOOL_CHDMAN, 'createhd', '-i',
+    command = [config.TOOL_CHDMAN, 'createhd', '-i',
                actual_media_path, '-o', output_chd_path]
 
     _add_chdman_common_args(command)
@@ -299,7 +299,7 @@ def compress_laserdisc_to_chd_routine(processing_path, temp_dir, name, output_si
     utils._emit_or_print(
         f">> Compressing to LaserDisc CHD: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_chd_path = os.path.join(temp_dir, f"{name}.chd")
-    command = [config.settings.TOOL_CHDMAN, 'createld', '-i',
+    command = [config.TOOL_CHDMAN, 'createld', '-i',
                actual_media_path, '-o', output_chd_path]
 
     _add_chdman_common_args(command)
@@ -346,7 +346,7 @@ def compress_raw_to_chd_routine(processing_path, temp_dir, name, output_signal=N
     utils._emit_or_print(
         f">> Compressing Raw Image to CHD: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_chd_path = os.path.join(temp_dir, f"{name}.chd")
-    command = [config.settings.TOOL_CHDMAN, 'createhd', '-i', actual_media_path,
+    command = [config.TOOL_CHDMAN, 'createhd', '-i', actual_media_path,
                '-o', output_chd_path]
 
     _add_chdman_common_args(command)
@@ -387,7 +387,7 @@ def compress_iso_to_cso_routine(processing_path, temp_dir, name, output_signal=N
     utils._emit_or_print(
         f">> Compressing ISO to CSO: \"{os.path.basename(actual_media_path)}\"", output_signal, fallback_color_code="green")
     output_cso_path = os.path.join(temp_dir, f"{name}.cso")
-    command = [config.settings.TOOL_MAXCSO, actual_media_path,
+    command = [config.TOOL_MAXCSO, actual_media_path,
                '--output', output_cso_path]
 
     maxcso_success = utils.run_command(
@@ -413,7 +413,7 @@ def compress_iso_to_cso_routine(processing_path, temp_dir, name, output_signal=N
 def extract_chd_to_cd_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None, target_format_from_worker="cue", **kwargs):
     utils._emit_or_print(
         f">> Verifying CHD (CD): \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="green")
-    verify_command = [config.settings.TOOL_CHDMAN, 'verify', '-i', processing_path]
+    verify_command = [config.TOOL_CHDMAN, 'verify', '-i', processing_path]
     if config.settings.CHDMAN_VERIFY_FIX:
         verify_command.append('--fix')
     if not utils.run_command(verify_command, output_signal=output_signal, error_signal=error_signal):
@@ -424,7 +424,7 @@ def extract_chd_to_cd_routine(processing_path, temp_dir, name, output_signal=Non
     output_base_name = os.path.join(temp_dir, f"{name}.{actual_target_format}")
     utils._emit_or_print(
         f">> Extracting CHD to {actual_target_format.upper()} ({os.path.basename(output_base_name)})...", output_signal, fallback_color_code="green")
-    command = [config.settings.TOOL_CHDMAN, 'extractcd', '-i',
+    command = [config.TOOL_CHDMAN, 'extractcd', '-i',
                processing_path, '-o', output_base_name]
 
     _add_chdman_common_args(command)
@@ -454,7 +454,7 @@ def extract_chd_to_cd_routine(processing_path, temp_dir, name, output_signal=Non
 def extract_chd_to_dvd_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None, **kwargs):
     utils._emit_or_print(
         f">> Verifying CHD (DVD): \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="green")
-    verify_command = [config.settings.TOOL_CHDMAN, 'verify', '-i', processing_path]
+    verify_command = [config.TOOL_CHDMAN, 'verify', '-i', processing_path]
     if config.settings.CHDMAN_VERIFY_FIX:
         verify_command.append('--fix')
     if not utils.run_command(verify_command, output_signal=output_signal, error_signal=error_signal):
@@ -464,7 +464,7 @@ def extract_chd_to_dvd_routine(processing_path, temp_dir, name, output_signal=No
     output_iso_path = os.path.join(temp_dir, f"{name}.iso")
     utils._emit_or_print(
         f">> Extracting CHD to DVD ISO ({os.path.basename(output_iso_path)})...", output_signal, fallback_color_code="green")
-    command = [config.settings.TOOL_CHDMAN, 'extractdvd',
+    command = [config.TOOL_CHDMAN, 'extractdvd',
                '-i', processing_path, '-o', output_iso_path]
     _add_chdman_common_args(command)
     if not utils.run_command(command, output_signal=output_signal, error_signal=error_signal):
@@ -481,7 +481,7 @@ def extract_dolphin_routine(processing_path, temp_dir, name, output_signal=None,
     utils._emit_or_print(
         f">> Converting {os.path.splitext(processing_path)[1].upper()} to {actual_target_format.upper()}: \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="green")
     output_file_path = os.path.join(temp_dir, f"{name}.{actual_target_format}")
-    command = [config.settings.TOOL_DOLPHINTOOL, 'convert',
+    command = [config.TOOL_DOLPHINTOOL, 'convert',
                f'--input={processing_path}', f'--output={output_file_path}', f'--format={actual_target_format}']
 
     # ** ADDED CHECK **
@@ -503,7 +503,7 @@ def extract_dolphin_routine(processing_path, temp_dir, name, output_signal=None,
 def extract_chd_to_harddisk_routine(processing_path, temp_dir, name, output_signal=None, error_signal=None, target_format_from_worker="img", **kwargs):
     utils._emit_or_print(
         f">> Verifying CHD (HD): \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="green")
-    verify_command = [config.settings.TOOL_CHDMAN, 'verify', '-i', processing_path]
+    verify_command = [config.TOOL_CHDMAN, 'verify', '-i', processing_path]
     if config.settings.CHDMAN_VERIFY_FIX:
         verify_command.append('--fix')
     if not utils.run_command(verify_command, output_signal=output_signal, error_signal=error_signal):
@@ -515,7 +515,7 @@ def extract_chd_to_harddisk_routine(processing_path, temp_dir, name, output_sign
         temp_dir, f"{name}.{actual_target_format}")
     utils._emit_or_print(
         f">> Extracting CHD to Hard Disk Image ({os.path.basename(output_image_path)})...", output_signal, fallback_color_code="green")
-    command = [config.settings.TOOL_CHDMAN, 'extracthd', '-i',
+    command = [config.TOOL_CHDMAN, 'extracthd', '-i',
                processing_path, '-o', output_image_path]
     _add_chdman_common_args(command)
     if not utils.run_command(command, output_signal=output_signal, error_signal=error_signal):
@@ -532,7 +532,7 @@ def extract_chd_to_laserdisc_routine(processing_path, temp_dir, name, output_sig
         f">> Extracting CHD to LaserDisc ({name}.{target_format_from_worker})...", output_signal, fallback_color_code="green")
     output_file_base = os.path.join(
         temp_dir, f"{name}.{target_format_from_worker}")
-    command = [config.settings.TOOL_CHDMAN, 'extractld', '-i',
+    command = [config.TOOL_CHDMAN, 'extractld', '-i',
                processing_path, '-o', output_file_base]
     _add_chdman_common_args(command)
     if not utils.run_command(command, output_signal=output_signal, error_signal=error_signal):
@@ -581,7 +581,7 @@ def convert_archive_to_7z_routine(processing_path, temp_dir, name, output_signal
         utils._emit_or_print(
             "No content found after extraction to re-compress to 7Z.", error_signal, is_error=True)
         return False
-    command = [config.settings.TOOL_7ZA, 'a', '-t7z', '-mx9', '-md=128m',
+    command = [config.TOOL_7ZA, 'a', '-t7z', '-mx9', '-md=128m',
                output_7z_path, '.']
     if not utils.run_command(command, cwd=temp_dir, output_signal=output_signal, error_signal=error_signal):
         return False
@@ -589,10 +589,10 @@ def convert_archive_to_7z_routine(processing_path, temp_dir, name, output_signal
         utils._emit_or_print(
             f"ERROR: Output 7Z \"{os.path.basename(output_7z_path)}\" not created or empty.", error_signal, is_error=True)
         return False
-    if config.settings.VALIDATE_FILE:
+    if config.settings.VALIDATE_FILE: # This was already correct
         utils._emit_or_print(">> Validating new 7Z archive...",
                              output_signal, fallback_color_code="green")
-        if not utils.run_command([config.settings.TOOL_7ZA, 't', output_7z_path], output_signal=output_signal, error_signal=error_signal):
+        if not utils.run_command([config.TOOL_7ZA, 't', output_7z_path], output_signal=output_signal, error_signal=error_signal): # This needs TOOL_7ZA from config, not config.settings
             utils._emit_or_print(
                 f"Validation failed for \"{os.path.basename(output_7z_path)}\".", error_signal, is_error=True)
             return False
@@ -607,7 +607,7 @@ def get_chd_info_routine(processing_path, temp_dir, name, output_signal=None, er
     """Gets information from a CHD file using 'chdman info'."""
     utils._emit_or_print(
         f">> Getting info for CHD: \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="cyan")
-    command = [config.settings.TOOL_CHDMAN, 'info', '-i', processing_path]
+    command = [config.TOOL_CHDMAN, 'info', '-i', processing_path]
 
     success = utils.run_command(
         command, output_signal=output_signal, error_signal=error_signal)
@@ -624,8 +624,8 @@ def verify_chd_routine(processing_path, temp_dir, name, output_signal=None, erro
     """Verifies a CHD file using 'chdman verify', with an option to fix."""
     utils._emit_or_print(
         f">> Verifying CHD: \"{os.path.basename(processing_path)}\"", output_signal, fallback_color_code="cyan")
-    command = [config.settings.TOOL_CHDMAN, 'verify', '-i', processing_path]
-    if config.settings.CHDMAN_VERIFY_FIX:
+    command = [config.TOOL_CHDMAN, 'verify', '-i', processing_path]
+    if config.settings.CHDMAN_VERIFY_FIX: # This is a user setting, so config.settings is correct
         command.append('--fix')
         utils._emit_or_print("   Attempting to fix errors if found (--fix enabled).",
                              output_signal, fallback_color_code="yellow")

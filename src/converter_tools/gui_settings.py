@@ -394,7 +394,7 @@ class SettingsDialog(QDialog):
             selected_proc_data = self.chdman_threaded_processors_combo_box.currentData()
             if selected_proc_data == "auto":
                 config.settings.CHDMAN_NUM_PROCESSORS_MODE = "auto"
-                config.settings.CHDMAN_NUM_PROCESSORS_MANUAL = config.DEFAULT_SETTINGS["CHDMAN_NUM_PROCESSORS_MANUAL"] 
+                config.settings.CHDMAN_NUM_PROCESSORS_MANUAL = config.DEFAULT_SETTINGS["CHDMAN_NUM_PROCESSORS_MANUAL"]
             else: 
                 config.settings.CHDMAN_NUM_PROCESSORS_MODE = "manual"
                 config.settings.CHDMAN_NUM_PROCESSORS_MANUAL = int(selected_proc_data)
@@ -425,7 +425,7 @@ class SettingsDialog(QDialog):
         if self.chdman_harddisk_sector_check_box: config.settings.CHDMAN_HD_USE_SECTOR_SIZE = self.chdman_harddisk_sector_check_box.isChecked()
         config.settings.CHDMAN_HD_SECTOR_SIZE = self._get_int_from_lineedit(self.chdman_harddisk_sector_line_edit, default_if_empty=None, allow_none_if_empty_and_default_is_none=True)
         if self.chdman_harddisk_size_check_box: config.settings.CHDMAN_HD_USE_SIZE = self.chdman_harddisk_size_check_box.isChecked()
-        config.settings.CHDMAN_HD_SIZE = self._get_str_from_lineedit(self.chdman_harddisk_size_line_edit, default_if_empty=None, allow_none_if_empty_and_default_is_none=True) 
+        config.settings.CHDMAN_HD_SIZE = self._get_str_from_lineedit(self.chdman_harddisk_size_line_edit, default_if_empty=None, allow_none_if_empty_and_default_is_none=True)
         if self.chdman_harddisk_chs_check_box: config.settings.CHDMAN_HD_USE_CHS = self.chdman_harddisk_chs_check_box.isChecked()
         config.settings.CHDMAN_HD_CHS_C = self._get_int_from_lineedit(self.chdman_harddisk_chs_c_line_edit, default_if_empty=None, allow_none_if_empty_and_default_is_none=True)
         config.settings.CHDMAN_HD_CHS_H = self._get_int_from_lineedit(self.chdman_harddisk_chs_h_line_edit, default_if_empty=None, allow_none_if_empty_and_default_is_none=True)

@@ -42,7 +42,7 @@ args, unknown = parser.parse_known_args()
 # --- Initial Checks (Remain the same) ---
 print("Performing initial checks...")
 checks_passed = True
-if not utils.check_tools_exist(config.settings.ESSENTIAL_TOOLS):
+if not utils.check_tools_exist(config.ESSENTIAL_TOOLS):
     checks_passed = False
 if config.settings.COPY_LOCALLY and not os.path.exists(config.settings.MAIN_TEMP_DIR):
     try:

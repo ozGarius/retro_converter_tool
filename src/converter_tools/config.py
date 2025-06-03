@@ -130,7 +130,7 @@ class AppSettings:
     def __init__(self):
         for key, value in DEFAULT_SETTINGS.items():
             setattr(self, key, value)
-        
+
         # Ensure MAIN_TEMP_DIR is processed by get_default_temp_dir() if it's not already.
         # In the current DEFAULT_SETTINGS, MAIN_TEMP_DIR is already correctly initialized using get_default_temp_dir(),
         # so the loop above is sufficient. If MAIN_TEMP_DIR were a simple path string in DEFAULT_SETTINGS,
@@ -162,7 +162,7 @@ class AppSettings:
             if key in loaded_data:
                 # For now, directly set the attribute. Type validation/coercion can be added later.
                 setattr(self, key, loaded_data[key])
-        
+
         # Special handling for MAIN_TEMP_DIR
         if hasattr(self, "MAIN_TEMP_DIR") and self.MAIN_TEMP_DIR:
             try:
@@ -184,7 +184,7 @@ class AppSettings:
             # Ensure the attribute exists on self first (it should due to __init__)
             if hasattr(self, "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"):
                 self.DOLPHINTOOL_RVZ_COMPRESSION_LEVEL = loaded_data.get("DOLPHIN_COMPRESS_LEVEL", DEFAULT_SETTINGS["DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"])
-        
+
         # Ensure DOLPHIN_COMPRESS_LEVEL attribute reflects DOLPHINTOOL_RVZ_COMPRESSION_LEVEL
         if hasattr(self, "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"):
              self.DOLPHIN_COMPRESS_LEVEL = self.DOLPHINTOOL_RVZ_COMPRESSION_LEVEL
@@ -199,7 +199,7 @@ class AppSettings:
             if hasattr(self, key):
                 settings_to_save[key] = getattr(self, key)
             else: # Should not happen if __init__ ran correctly
-                settings_to_save[key] = DEFAULT_SETTINGS[key] 
+                settings_to_save[key] = DEFAULT_SETTINGS[key]
 
         # Ensure DOLPHIN_COMPRESS_LEVEL in the saved file reflects current RVZ compression level
         if hasattr(self, "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"):
@@ -210,7 +210,7 @@ class AppSettings:
             parent_dir = os.path.dirname(file_path)
             if parent_dir: # Check if parent_dir is not empty (e.g. for relative file_path in current dir)
                 os.makedirs(parent_dir, exist_ok=True)
-            
+
             # Ensure MAIN_TEMP_DIR exists
             if hasattr(self, "MAIN_TEMP_DIR") and self.MAIN_TEMP_DIR:
                 try:
