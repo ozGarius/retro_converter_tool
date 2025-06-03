@@ -239,7 +239,7 @@ class ConverterWindow(QMainWindow):
         self._populate_job_types()
         if self.delete_input_checkbox:
             self.delete_input_checkbox.setChecked(
-                config.DELETE_SOURCE_ON_SUCCESS)
+                config.settings.DELETE_SOURCE_ON_SUCCESS)
         if self.output_same_folder_checkbox:
             self._on_output_same_folder_toggled(
                 self.output_same_folder_checkbox.isChecked())
@@ -584,7 +584,7 @@ class ConverterWindow(QMainWindow):
 
     @Slot(bool)
     def _on_delete_input_toggled(self, checked):
-        config.DELETE_SOURCE_ON_SUCCESS = checked
+        config.settings.DELETE_SOURCE_ON_SUCCESS = checked
         if self.statusbar:
             self.statusbar.showMessage(
                 f"Delete input files on success: {'Enabled' if checked else 'Disabled'}")
@@ -982,7 +982,7 @@ class ConverterWindow(QMainWindow):
                 self.statusbar.showMessage("Settings updated and saved.")
             if self.delete_input_checkbox:
                 self.delete_input_checkbox.setChecked(
-                    config.DELETE_SOURCE_ON_SUCCESS)
+                    config.settings.DELETE_SOURCE_ON_SUCCESS)
         else:
             if self.statusbar:
                 self.statusbar.showMessage("Settings dialog cancelled.")
@@ -1134,7 +1134,7 @@ class ConverterWindow(QMainWindow):
         if not os.path.isdir(norm_folder):
             return found
 
-        norm_temp_main_dir = os.path.normpath(config.MAIN_TEMP_DIR)
+        norm_temp_main_dir = os.path.normpath(config.settings.MAIN_TEMP_DIR)
         if norm_folder.startswith(norm_temp_main_dir):
             if self.log_output_text:
                 self.log_output_text.append(
@@ -1258,7 +1258,7 @@ def run_gui():
         print(f"DEBUG: Application icon not found at {icon_path}. Using default system icon.")
 
     print(
-        f"DEBUG (gui_main_window): Config SUBPROCESS_TIMEOUT: {config.SUBPROCESS_TIMEOUT}")
+        f"DEBUG (gui_main_window): Config SUBPROCESS_TIMEOUT: {config.settings.SUBPROCESS_TIMEOUT}")
 
     print("DEBUG: Creating ConverterWindow instance...")
     window_wrapper = ConverterWindow()

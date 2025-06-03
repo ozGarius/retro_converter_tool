@@ -160,16 +160,17 @@ def run_cli(input_path_from_args=None):
 
         # 5. Processing Options
         utils._emit_or_print("\n--- Processing Options ---", fallback_color_code="\033[93m")
-        allow_overwrite_cli = get_yes_no_input("Overwrite existing output files?", default_yes=config.OVERWRITE_EXISTING)  # Assuming OVERWRITE_EXISTING in config
-        delete_input_cli = get_yes_no_input("Delete input files after successful job?", default_yes=config.DELETE_SOURCE_ON_SUCCESS)
-        copy_locally_cli = get_yes_no_input("Copy files locally for processing (recommended for network drives)?", default_yes=config.COPY_LOCALLY)
+        # Changed default_yes for allow_overwrite_cli as OVERWRITE_EXISTING is not a defined setting.
+        allow_overwrite_cli = get_yes_no_input("Overwrite existing output files?", default_yes=False) 
+        delete_input_cli = get_yes_no_input("Delete input files after successful job?", default_yes=config.settings.DELETE_SOURCE_ON_SUCCESS)
+        copy_locally_cli = get_yes_no_input("Copy files locally for processing (recommended for network drives)?", default_yes=config.settings.COPY_LOCALLY)
 
         # Temporarily set config for this run (careful if other parts of app use config concurrently)
         # A better way might be to pass these as direct arguments to process_file if it supported them all.
-        original_config_delete = config.DELETE_SOURCE_ON_SUCCESS
-        original_config_copy = config.COPY_LOCALLY
-        config.DELETE_SOURCE_ON_SUCCESS = delete_input_cli
-        config.COPY_LOCALLY = copy_locally_cli
+        original_config_delete = config.settings.DELETE_SOURCE_ON_SUCCESS
+        original_config_copy = config.settings.COPY_LOCALLY
+        config.settings.DELETE_SOURCE_ON_SUCCESS = delete_input_cli
+        config.settings.COPY_LOCALLY = copy_locally_cli
 
         # 6. Choose Output Folder
         explicit_output_dir = None

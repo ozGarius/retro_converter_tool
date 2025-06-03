@@ -42,14 +42,14 @@ args, unknown = parser.parse_known_args()
 # --- Initial Checks (Remain the same) ---
 print("Performing initial checks...")
 checks_passed = True
-if not utils.check_tools_exist(config.ESSENTIAL_TOOLS):
+if not utils.check_tools_exist(config.settings.ESSENTIAL_TOOLS):
     checks_passed = False
-if config.COPY_LOCALLY and not os.path.exists(config.MAIN_TEMP_DIR):
+if config.settings.COPY_LOCALLY and not os.path.exists(config.settings.MAIN_TEMP_DIR):
     try:
-        os.makedirs(config.MAIN_TEMP_DIR)
-        print(f"\033[92mCreated main temp directory: \"{config.MAIN_TEMP_DIR}\"\033[0m")
+        os.makedirs(config.settings.MAIN_TEMP_DIR)
+        print(f"\033[92mCreated main temp directory: \"{config.settings.MAIN_TEMP_DIR}\"\033[0m")
     except OSError as e:
-        print(f"\033[91mERROR: Failed to create main temporary directory {config.MAIN_TEMP_DIR}: {e}\033[0m")
+        print(f"\033[91mERROR: Failed to create main temporary directory {config.settings.MAIN_TEMP_DIR}: {e}\033[0m")
         checks_passed = False
 
 if not checks_passed:

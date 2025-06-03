@@ -68,7 +68,7 @@ def check_tools_exist(tools_list):
         _emit_or_print(
             "Ensure 'converter_tools' folder is in the same directory and contains all executables.", is_error=True)
         _emit_or_print(
-            f"Expected tools directory: {config.TOOLS_DIR}", is_error=True)
+            f"Expected tools directory: {config.settings.TOOLS_DIR}", is_error=True)
         return False
     return True
 
@@ -133,12 +133,12 @@ def create_temp_dir(base_name_of_input_file, output_signal=None, error_signal=No
     temp_dir_prefix = f"{file_name_part_for_prefix}_"
     temp_dir_suffix = "_temp"
 
-    if not config.COPY_LOCALLY:
+    if not config.settings.COPY_LOCALLY:
         temp_base_for_this_file = os.path.join(
             original_dir_of_input_file, "_processing_temps_")
         msg = f"Temp folder for this file will be inside: \"{temp_base_for_this_file}\" (COPY_LOCALLY=False)"
     else:
-        temp_base_for_this_file = config.MAIN_TEMP_DIR
+        temp_base_for_this_file = config.settings.MAIN_TEMP_DIR
         msg = f"Temp folder for this file will be inside: \"{temp_base_for_this_file}\" (COPY_LOCALLY=True)"
     _emit_or_print(msg, output_signal, fallback_color_code="green")
 
@@ -264,7 +264,7 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                     f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
                 break
 
-    if config.DELETE_SOURCE_ON_SUCCESS and original_file_path and os.path.exists(original_file_path):
+    if config.settings.DELETE_SOURCE_ON_SUCCESS and original_file_path and os.path.exists(original_file_path):
         files_to_delete = [original_file_path]
         base_name, ext = os.path.splitext(original_file_path)
         if ext.lower() == '.cue':
@@ -295,11 +295,11 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                     _emit_or_print(
                         f"WARNING: send2trash failed for \"{file_to_delete_path}\": {e_s2t}. Trying next method.", error_signal, fallback_color_code="yellow")
 
-            if not deleted_successfully_to_recycle and os.name == 'nt' and os.path.exists(config.TOOL_RECYCLE):
+            if not deleted_successfully_to_recycle and os.name == 'nt' and os.path.exists(config.settings.TOOL_RECYCLE):
                 _emit_or_print(
                     f">> Attempting to use recycle.exe for \"{file_to_delete_path}\"", output_signal, fallback_color_code="green")
                 recycle_success = run_command(
-                    [config.TOOL_RECYCLE, '-f', file_to_delete_path], output_signal=output_signal, error_signal=error_signal)
+                    [config.settings.TOOL_RECYCLE, '-f', file_to_delete_path], output_signal=output_signal, error_signal=error_signal)
                 if recycle_success:
                     _emit_or_print(
                         f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin via recycle.exe.", output_signal)
@@ -323,7 +323,7 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
 def extract_archive(archive_path, output_dir, output_signal=None, error_signal=None):
     _emit_or_print(f">> Extracting: \"{os.path.basename(archive_path)}\" to \"{output_dir}\"",
                    output_signal, fallback_color_code="green")
-    command = [config.TOOL_7ZA, 'x', archive_path, f'-o{output_dir}', '-y']
+    command = [config.settings.TOOL_7ZA, 'x', archive_path, f'-o{output_dir}', '-y']
     return run_command(command, output_signal=output_signal, error_signal=error_signal)
 
 
@@ -351,7 +351,7 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
         return False
 
     path_to_process_in_temp = file_path
-    if config.COPY_LOCALLY:
+    if config.settings.COPY_LOCALLY:
         _emit_or_print(f">> Copying \"{file_name_base_with_ext}\" to \"{temp_path_for_this_file}\"",
                        output_signal, fallback_color_code="green")
         try:
@@ -399,7 +399,7 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
                     output_signal=output_signal, error_signal=error_signal)
             return False
     else:
-        _emit_or_print(f">> Processing \"{file_name_base_with_ext}\" with outputs to temp. (COPY_LOCALLY=False)",
+        _emit_or_print(f">> Processing \"{file_name_base_with_ext}\" with outputs to temp. (COPY_LOCALLY=False)", # This check should use config.settings.COPY_LOCALLY implicitly by falling into else
                        output_signal, fallback_color_code="green")
 
     if stage_reporter:
@@ -523,7 +523,7 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
             if file_progress_reporter:
                 file_progress_reporter(100)  # Complete
             cleanup(temp_path_for_this_file,
-                    file_path if config.DELETE_SOURCE_ON_SUCCESS else None, output_signal, error_signal)
+                    file_path if config.settings.DELETE_SOURCE_ON_SUCCESS else None, output_signal, error_signal)
             return True
         else:
             cleanup(temp_path_for_this_file,

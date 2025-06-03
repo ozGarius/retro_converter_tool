@@ -115,147 +115,134 @@ DEFAULT_SETTINGS = {
     # Legacy/Other settings
     "DELETE_SOURCE_ON_SUCCESS": False,
     "VALIDATE_FILE": True,
-    "DOLPHIN_COMPRESS_LEVEL": 9,
+    "DOLPHIN_COMPRESS_LEVEL": 9, # This will be effectively superseded by DOLPHINTOOL_RVZ_COMPRESSION_LEVEL but kept for transition
+
+    # New settings
+    "LOG_DIRECTORY": "./logs/", # Relative to app root or a defined base path
+    "LAST_USED_DIRECTORY": None, # Stores the last directory used for input/output
 }
 
-# --- Initialize settings variables with defaults at module level ---
-# This ensures they are available as config.VARIABLE_NAME
-COPY_LOCALLY = DEFAULT_SETTINGS["COPY_LOCALLY"]
-MAIN_TEMP_DIR = DEFAULT_SETTINGS["MAIN_TEMP_DIR"]
-DEBUG_MODE = DEFAULT_SETTINGS["DEBUG_MODE"]
-DELETE_SOURCE_ON_SUCCESS = DEFAULT_SETTINGS["DELETE_SOURCE_ON_SUCCESS"]
-VALIDATE_FILE = DEFAULT_SETTINGS["VALIDATE_FILE"]
-# This was missing in your version
-SUBPROCESS_TIMEOUT = DEFAULT_SETTINGS["SUBPROCESS_TIMEOUT"]
 
-CHDMAN_NUM_PROCESSORS_MODE = DEFAULT_SETTINGS["CHDMAN_NUM_PROCESSORS_MODE"]
-CHDMAN_NUM_PROCESSORS_MANUAL = DEFAULT_SETTINGS["CHDMAN_NUM_PROCESSORS_MANUAL"]
-CHDMAN_CD_USE_CUSTOM_HUNKS = DEFAULT_SETTINGS["CHDMAN_CD_USE_CUSTOM_HUNKS"]
-CHDMAN_CD_HUNKS = DEFAULT_SETTINGS["CHDMAN_CD_HUNKS"]
-CHDMAN_CD_USE_CUSTOM_COMPRESSION = DEFAULT_SETTINGS["CHDMAN_CD_USE_CUSTOM_COMPRESSION"]
-CHDMAN_CD_COMPRESSION_TYPES = DEFAULT_SETTINGS["CHDMAN_CD_COMPRESSION_TYPES"]
-CHDMAN_DVD_USE_CUSTOM_HUNKS = DEFAULT_SETTINGS["CHDMAN_DVD_USE_CUSTOM_HUNKS"]
-CHDMAN_DVD_HUNKS = DEFAULT_SETTINGS["CHDMAN_DVD_HUNKS"]
-CHDMAN_DVD_USE_CUSTOM_COMPRESSION = DEFAULT_SETTINGS["CHDMAN_DVD_USE_CUSTOM_COMPRESSION"]
-CHDMAN_DVD_COMPRESSION_TYPES = DEFAULT_SETTINGS["CHDMAN_DVD_COMPRESSION_TYPES"]
-CHDMAN_LD_USE_CUSTOM_HUNKS = DEFAULT_SETTINGS["CHDMAN_LD_USE_CUSTOM_HUNKS"]
-CHDMAN_LD_HUNKS = DEFAULT_SETTINGS["CHDMAN_LD_HUNKS"]
-CHDMAN_LD_USE_CUSTOM_COMPRESSION = DEFAULT_SETTINGS["CHDMAN_LD_USE_CUSTOM_COMPRESSION"]
-CHDMAN_LD_COMPRESSION_TYPES = DEFAULT_SETTINGS["CHDMAN_LD_COMPRESSION_TYPES"]
-CHDMAN_LD_USE_INPUT_START_FRAME = DEFAULT_SETTINGS["CHDMAN_LD_USE_INPUT_START_FRAME"]
-CHDMAN_LD_INPUT_START_FRAME = DEFAULT_SETTINGS["CHDMAN_LD_INPUT_START_FRAME"]
-CHDMAN_LD_USE_INPUT_FRAMES = DEFAULT_SETTINGS["CHDMAN_LD_USE_INPUT_FRAMES"]
-CHDMAN_LD_INPUT_FRAMES = DEFAULT_SETTINGS["CHDMAN_LD_INPUT_FRAMES"]
-CHDMAN_HD_USE_CUSTOM_HUNKS = DEFAULT_SETTINGS["CHDMAN_HD_USE_CUSTOM_HUNKS"]
-CHDMAN_HD_HUNKS = DEFAULT_SETTINGS["CHDMAN_HD_HUNKS"]
-CHDMAN_HD_USE_CUSTOM_COMPRESSION = DEFAULT_SETTINGS["CHDMAN_HD_USE_CUSTOM_COMPRESSION"]
-CHDMAN_HD_COMPRESSION_TYPES = DEFAULT_SETTINGS["CHDMAN_HD_COMPRESSION_TYPES"]
-CHDMAN_HD_USE_SECTOR_SIZE = DEFAULT_SETTINGS["CHDMAN_HD_USE_SECTOR_SIZE"]
-CHDMAN_HD_SECTOR_SIZE = DEFAULT_SETTINGS["CHDMAN_HD_SECTOR_SIZE"]
-CHDMAN_HD_USE_SIZE = DEFAULT_SETTINGS["CHDMAN_HD_USE_SIZE"]
-CHDMAN_HD_SIZE = DEFAULT_SETTINGS["CHDMAN_HD_SIZE"]
-CHDMAN_HD_USE_CHS = DEFAULT_SETTINGS["CHDMAN_HD_USE_CHS"]
-CHDMAN_HD_CHS_C = DEFAULT_SETTINGS["CHDMAN_HD_CHS_C"]
-CHDMAN_HD_CHS_H = DEFAULT_SETTINGS["CHDMAN_HD_CHS_H"]
-CHDMAN_HD_CHS_S = DEFAULT_SETTINGS["CHDMAN_HD_CHS_S"]
-CHDMAN_HD_USE_TEMPLATE = DEFAULT_SETTINGS["CHDMAN_HD_USE_TEMPLATE"]
-CHDMAN_HD_TEMPLATE_PATH = DEFAULT_SETTINGS["CHDMAN_HD_TEMPLATE_PATH"]
-CHDMAN_RAW_USE_CUSTOM_HUNKS = DEFAULT_SETTINGS["CHDMAN_RAW_USE_CUSTOM_HUNKS"]
-CHDMAN_RAW_HUNKS = DEFAULT_SETTINGS["CHDMAN_RAW_HUNKS"]
-CHDMAN_RAW_USE_CUSTOM_COMPRESSION = DEFAULT_SETTINGS["CHDMAN_RAW_USE_CUSTOM_COMPRESSION"]
-CHDMAN_RAW_COMPRESSION_TYPES = DEFAULT_SETTINGS["CHDMAN_RAW_COMPRESSION_TYPES"]
-CHDMAN_VERIFY_FIX = DEFAULT_SETTINGS["CHDMAN_VERIFY_FIX"]
-DOLPHINTOOL_RVZ_BLOCKSIZE = DEFAULT_SETTINGS["DOLPHINTOOL_RVZ_BLOCKSIZE"]
-DOLPHINTOOL_RVZ_COMPRESSION_TYPE = DEFAULT_SETTINGS["DOLPHINTOOL_RVZ_COMPRESSION_TYPE"]
-DOLPHINTOOL_RVZ_COMPRESSION_LEVEL = DEFAULT_SETTINGS["DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"]
-DOLPHINTOOL_WIA_COMPRESSION_TYPE = DEFAULT_SETTINGS["DOLPHINTOOL_WIA_COMPRESSION_TYPE"]
-DOLPHINTOOL_WIA_COMPRESSION_LEVEL = DEFAULT_SETTINGS["DOLPHINTOOL_WIA_COMPRESSION_LEVEL"]
-DOLPHINTOOL_GCZ_BLOCKSIZE = DEFAULT_SETTINGS["DOLPHINTOOL_GCZ_BLOCKSIZE"]
-DOLPHIN_COMPRESS_LEVEL = DEFAULT_SETTINGS["DOLPHIN_COMPRESS_LEVEL"]
+class AppSettings:
+    """
+    Holds all application settings, initialized from DEFAULT_SETTINGS.
+    """
+    def __init__(self):
+        for key, value in DEFAULT_SETTINGS.items():
+            setattr(self, key, value)
+        
+        # Ensure MAIN_TEMP_DIR is processed by get_default_temp_dir() if it's not already.
+        # In the current DEFAULT_SETTINGS, MAIN_TEMP_DIR is already correctly initialized using get_default_temp_dir(),
+        # so the loop above is sufficient. If MAIN_TEMP_DIR were a simple path string in DEFAULT_SETTINGS,
+        # it might need special handling here, e.g.:
+        # if not os.path.isabs(self.MAIN_TEMP_DIR) or not os.path.exists(self.MAIN_TEMP_DIR):
+        #     self.MAIN_TEMP_DIR = get_default_temp_dir()
+        # However, this is not currently needed due to the structure of DEFAULT_SETTINGS.
+
+    def load(self, file_path):
+        """Loads settings from the JSON file into the instance's attributes."""
+        if not os.path.exists(file_path):
+            print(f"Settings file not found at {file_path}. Using default settings.")
+            return
+
+        try:
+            with open(file_path, 'r') as f:
+                loaded_data = json.load(f)
+        except FileNotFoundError: # Should be caught by os.path.exists, but good practice
+            print(f"ERROR: Settings file disappeared before it could be read: {file_path}. Using default settings.")
+            return
+        except json.JSONDecodeError:
+            print(f"ERROR: Could not decode JSON from {file_path}. Using default settings.")
+            return
+        except Exception as e:
+            print(f"ERROR: Could not load settings from {file_path}: {e}. Using default settings.")
+            return
+
+        for key in DEFAULT_SETTINGS.keys(): # Iterate over known default keys to avoid polluting self with unknown keys
+            if key in loaded_data:
+                # For now, directly set the attribute. Type validation/coercion can be added later.
+                setattr(self, key, loaded_data[key])
+        
+        # Special handling for MAIN_TEMP_DIR
+        if hasattr(self, "MAIN_TEMP_DIR") and self.MAIN_TEMP_DIR:
+            try:
+                os.makedirs(self.MAIN_TEMP_DIR, exist_ok=True)
+            except Exception as e:
+                print(f"Warning: Could not create loaded MAIN_TEMP_DIR '{self.MAIN_TEMP_DIR}': {e}. Resetting to default.")
+                self.MAIN_TEMP_DIR = get_default_temp_dir()
+                # Ensure the default one is also created if it somehow wasn't
+                try:
+                    os.makedirs(self.MAIN_TEMP_DIR, exist_ok=True)
+                except Exception as e_default_mkdir:
+                    print(f"ERROR: Could not create default MAIN_TEMP_DIR '{self.MAIN_TEMP_DIR}': {e_default_mkdir}. Temp operations may fail.")
+
+        else: # If MAIN_TEMP_DIR is not in settings or is empty, use default
+            self.MAIN_TEMP_DIR = get_default_temp_dir()
+
+        # Handle transition from old DOLPHIN_COMPRESS_LEVEL
+        if "DOLPHIN_COMPRESS_LEVEL" in loaded_data and "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL" not in loaded_data:
+            # Ensure the attribute exists on self first (it should due to __init__)
+            if hasattr(self, "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"):
+                self.DOLPHINTOOL_RVZ_COMPRESSION_LEVEL = loaded_data.get("DOLPHIN_COMPRESS_LEVEL", DEFAULT_SETTINGS["DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"])
+        
+        # Ensure DOLPHIN_COMPRESS_LEVEL attribute reflects DOLPHINTOOL_RVZ_COMPRESSION_LEVEL
+        if hasattr(self, "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"):
+             self.DOLPHIN_COMPRESS_LEVEL = self.DOLPHINTOOL_RVZ_COMPRESSION_LEVEL
 
 
-def _apply_default_settings_to_globals():  # This is now more of a reset function if needed
-    """Helper to apply all default settings from DEFAULT_SETTINGS to global variables."""
-    for key, value in DEFAULT_SETTINGS.items():
-        globals()[key] = value
-    # Ensure this is re-evaluated
-    globals()["MAIN_TEMP_DIR"] = get_default_temp_dir()
+        print(f"Settings loaded into AppSettings instance from: {file_path}")
+
+    def save(self, file_path):
+        """Saves the current instance attributes to the JSON file."""
+        settings_to_save = {}
+        for key in DEFAULT_SETTINGS.keys(): # Iterate over known default keys
+            if hasattr(self, key):
+                settings_to_save[key] = getattr(self, key)
+            else: # Should not happen if __init__ ran correctly
+                settings_to_save[key] = DEFAULT_SETTINGS[key] 
+
+        # Ensure DOLPHIN_COMPRESS_LEVEL in the saved file reflects current RVZ compression level
+        if hasattr(self, "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"):
+            settings_to_save["DOLPHIN_COMPRESS_LEVEL"] = self.DOLPHINTOOL_RVZ_COMPRESSION_LEVEL
+
+        try:
+            # Ensure parent directory for settings file exists
+            parent_dir = os.path.dirname(file_path)
+            if parent_dir: # Check if parent_dir is not empty (e.g. for relative file_path in current dir)
+                os.makedirs(parent_dir, exist_ok=True)
+            
+            # Ensure MAIN_TEMP_DIR exists
+            if hasattr(self, "MAIN_TEMP_DIR") and self.MAIN_TEMP_DIR:
+                try:
+                    os.makedirs(self.MAIN_TEMP_DIR, exist_ok=True)
+                except Exception as e:
+                    print(f"Warning: Could not create specified MAIN_TEMP_DIR '{self.MAIN_TEMP_DIR}' during save: {e}")
+
+            with open(file_path, 'w') as f:
+                json.dump(settings_to_save, f, indent=4)
+            print(f"AppSettings instance saved to: {file_path}")
+        except Exception as e:
+            print(f"ERROR: Could not save AppSettings instance to {file_path}: {e}")
+
+
+# Create a global instance of AppSettings
+settings = AppSettings()
+
+
+# The old module-level global variables for settings are now removed.
+# Access settings via the 'settings' instance, e.g., config.settings.COPY_LOCALLY
+
+# The _apply_default_settings_to_globals function is also removed as it's no longer needed.
 
 
 def load_app_settings():
-    """Loads settings from the JSON file into the global config variables."""
-    # Globals are already initialized with defaults at module scope.
-    # This function will override them if a settings file is found and valid.
-
-    if os.path.exists(SETTINGS_FILE_PATH):
-        try:
-            with open(SETTINGS_FILE_PATH, 'r') as f:
-                loaded_settings = json.load(f)
-
-            for key, default_value in DEFAULT_SETTINGS.items():
-                # Use loaded value if key exists in file, otherwise keep the module-level default
-                if key in loaded_settings:
-                    globals()[key] = loaded_settings[key]
-
-            # Specific handling for MAIN_TEMP_DIR to ensure it's valid and exists
-            loaded_main_temp_dir = loaded_settings.get("MAIN_TEMP_DIR")
-            if loaded_main_temp_dir:
-                globals()["MAIN_TEMP_DIR"] = loaded_main_temp_dir
-                try:
-                    os.makedirs(loaded_main_temp_dir, exist_ok=True)
-                except Exception as e:
-                    print(
-                        f"Warning: Could not create loaded MAIN_TEMP_DIR '{loaded_main_temp_dir}': {e}. Using default.")
-                    # Fallback
-                    globals()["MAIN_TEMP_DIR"] = get_default_temp_dir()
-            else:  # If not in file or empty string, ensure default is used and created
-                globals()["MAIN_TEMP_DIR"] = get_default_temp_dir()
-
-            # Handle transition from old DOLPHIN_COMPRESS_LEVEL
-            if "DOLPHIN_COMPRESS_LEVEL" in loaded_settings and "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL" not in loaded_settings:
-                globals()["DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"] = loaded_settings.get(
-                    "DOLPHIN_COMPRESS_LEVEL", DEFAULT_SETTINGS["DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"])
-
-            globals()["DOLPHIN_COMPRESS_LEVEL"] = globals()[
-                "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL"]
-
-            print(f"Settings loaded from: {SETTINGS_FILE_PATH}")
-
-        except json.JSONDecodeError:
-            print(
-                f"ERROR: Could not decode JSON from {SETTINGS_FILE_PATH}. Using module-level default settings.")
-        except Exception as e:
-            print(
-                f"ERROR: Could not load settings from {SETTINGS_FILE_PATH}: {e}. Using module-level default settings.")
-    else:
-        print(
-            f"Settings file not found at {SETTINGS_FILE_PATH}. Using module-level default settings. File will be created on next save.")
+    """Loads settings from the JSON file into the global 'settings' instance."""
+    settings.load(SETTINGS_FILE_PATH)
 
 
 def save_app_settings():
-    """Saves the current global config variables to the JSON file."""
-    settings_to_save = {}
-    for key in DEFAULT_SETTINGS.keys():
-        settings_to_save[key] = globals().get(key)
-
-    settings_to_save["DOLPHIN_COMPRESS_LEVEL"] = globals().get(
-        "DOLPHINTOOL_RVZ_COMPRESSION_LEVEL")
-
-    try:
-        os.makedirs(os.path.dirname(SETTINGS_FILE_PATH), exist_ok=True)
-        main_temp_directory = globals().get("MAIN_TEMP_DIR")
-        if main_temp_directory:  # Ensure the specified temp dir exists
-            try:
-                os.makedirs(main_temp_directory, exist_ok=True)
-            except Exception as e:
-                print(
-                    f"Warning: Could not create specified MAIN_TEMP_DIR '{main_temp_directory}' during save: {e}")
-
-        with open(SETTINGS_FILE_PATH, 'w') as f:
-            json.dump(settings_to_save, f, indent=4)
-        print(f"Settings saved to: {SETTINGS_FILE_PATH}")
-    except Exception as e:
-        print(f"ERROR: Could not save settings to {SETTINGS_FILE_PATH}: {e}")
+    """Saves the current settings from the global 'settings' instance to the JSON file."""
+    settings.save(SETTINGS_FILE_PATH)
 
 
 # --- TOOL PATHS ---
