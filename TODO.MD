@@ -1,4 +1,4 @@
-# TODO List for Oz Converters
+# TODO List for Retro Converter Tool
 
 ## Completed Tasks (Session: 2024-07-23)
 
@@ -15,7 +15,7 @@
     *   (Note: Actual concurrent processing logic is pending).
 *   **About Dialog**:
     *   [x] Comprehensive About dialog added to GUI ("Help" > "About").
-    *   [x] Displays app name ("Oz Converters"), version ("1.1.0"), copyright, and Python version.
+        *   [x] Displays app name ("Retro Converter Tool"), version ("1.1.0"), copyright, and Python version.
     *   [x] Dynamically lists "Tools and Libraries Used" and "Third-Party Licenses" by parsing `README.MD`.
     *   [x] Includes a clickable GitHub repository link.
 *   **README.md Content for About Dialog**:

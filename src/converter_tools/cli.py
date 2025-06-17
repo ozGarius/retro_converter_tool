@@ -83,7 +83,7 @@ def run_cli(input_path_from_args=None):
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
         utils._emit_or_print("=================================================", fallback_color_code="\033[96m")
-        utils._emit_or_print(">> Converter Tool - Command Line Interface     <<", fallback_color_code="\033[96m")
+        utils._emit_or_print(">> Retro Converter Tool - Command Line Interface <<", fallback_color_code="\033[96m")
         utils._emit_or_print("=================================================", fallback_color_code="\033[96m")
 
         # 1. Choose Job Type

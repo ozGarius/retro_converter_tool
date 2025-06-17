@@ -262,7 +262,7 @@ class ConverterWindow(QMainWindow):
         self.update_ui_for_job_selection()
         if self.statusbar:
             self.statusbar.showMessage(f"Ready. Max Concurrent Jobs: {config.settings.CONCURRENT_JOBS}. Select a job type to begin.")
-        self.ui.setWindowTitle("Converter Tool")
+        self.ui.setWindowTitle("Retro Converter Tool")
 
         # --- Jobs Menu ---
         self.jobs_menu = QMenu("&Jobs", self.ui)
@@ -343,11 +343,10 @@ class ConverterWindow(QMainWindow):
 
 
     @Slot()
-    @Slot()
     def show_about_dialog(self):
-        app_name = "Retro Converter Tool"
+        app_name = "Retro Converter Tool" # Verified
         version = "1.1.0" # This might need to be dynamic later
-        copyright_text = "(c) 2023-2024 Ozymandias"
+        copyright_text = "(c) 2023-2024 ozGarius" # Corrected copyright name
 
         # NOTE: The following lines related to README parsing are intentionally removed:
         # base_path = os.path.dirname(__file__)
@@ -390,7 +389,7 @@ class ConverterWindow(QMainWindow):
             f"<hr>"
             f"<p><b>Third-Party Licenses:</b><br>{licenses_text}</p>"
             f"<hr>"
-            f"<p><b>GitHub Repository:</b> <a href='https://github.com/OzymandiasTheGreat/oz-converters'>oz-converters on GitHub</a></p>"
+            f"<p><b>GitHub Repository:</b> <a href='https://github.com/ozGarius/retro_converter_tool'>retro_converter_tool on GitHub</a></p>" # Corrected GitHub URL
         )
 
         msg_box = QMessageBox(self.ui if self.ui else self) # Use self.ui as parent

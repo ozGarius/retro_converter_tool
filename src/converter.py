@@ -35,7 +35,7 @@ except Exception as e:
     sys.exit(1)
 
 # --- Argument Parsing (Modified) ---
-parser = argparse.ArgumentParser(description="Consolidated File Converter Tool.")
+parser = argparse.ArgumentParser(description="Retro Converter Tool.")
 parser.add_argument('--cli', action='store_true', help='Launch the Command-Line Interface instead of the GUI.')
 parser.add_argument('input_path', nargs='?', default=None, help='Optional input file/folder path (used with --cli).')
 
