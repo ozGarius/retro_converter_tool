@@ -14,7 +14,7 @@ try:
         QPushButton, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView,
         QComboBox, QLabel, QTextEdit, QSizePolicy, QSpacerItem, QMenuBar,
         QFileDialog, QMessageBox, QStatusBar, QDialog, QDialogButtonBox,
-        QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar, QActionGroup
+        QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar # QActionGroup Removed
     )
     from PySide6.QtGui import QAction, QKeySequence, QColor, QPalette, QCloseEvent, QIcon
     from PySide6.QtCore import Qt, Slot, Signal, QPoint
@@ -266,11 +266,12 @@ class ConverterWindow(QMainWindow):
 
         # --- Jobs Menu ---
         self.jobs_menu = QMenu("&Jobs", self.ui)
+        self.concurrent_job_actions = [] # Initialize list to store actions
 
         # --- Concurrent Jobs Submenu/Setting ---
         self.concurrent_jobs_menu = QMenu("Concurrent Jobs", self.ui)
-        self.jobs_group = QActionGroup(self.concurrent_jobs_menu)
-        self.jobs_group.setExclusive(True)
+        # self.jobs_group = QActionGroup(self.concurrent_jobs_menu) # Removed
+        # self.jobs_group.setExclusive(True) # Removed
 
         max_jobs_options = range(1, (os.cpu_count() or 4) + 1)
         if (os.cpu_count() or 0) > 10: # Cap at 10 if too many cores
@@ -279,12 +280,14 @@ class ConverterWindow(QMainWindow):
         for i in max_jobs_options:
             action = QAction(f"{i} Job{'s' if i > 1 else ''}", self.concurrent_jobs_menu, checkable=True)
             action.setData(i)
+            action.triggered.connect(self._handle_concurrent_jobs_changed) # Connect individual action
             self.concurrent_jobs_menu.addAction(action)
-            self.jobs_group.addAction(action)
+            # self.jobs_group.addAction(action) # Removed
+            self.concurrent_job_actions.append(action) # Add to our list
             if i == config.settings.CONCURRENT_JOBS:
                 action.setChecked(True)
 
-        self.jobs_group.triggered.connect(self._handle_concurrent_jobs_changed)
+        # self.jobs_group.triggered.connect(self._handle_concurrent_jobs_changed) # Removed
         self.jobs_menu.addMenu(self.concurrent_jobs_menu)
 
         menu_bar = self.ui.menuBar()
@@ -391,17 +394,31 @@ class ConverterWindow(QMainWindow):
         msg_box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         msg_box.exec()
 
-    @Slot(QAction)
-    def _handle_concurrent_jobs_changed(self, action):
-        num_jobs = action.data()
+    @Slot() # Changed signature if using self.sender()
+    def _handle_concurrent_jobs_changed(self):
+        triggered_action = self.sender()
+        if not isinstance(triggered_action, QAction):
+            if utils.APP_LOGGER:
+                utils.APP_LOGGER.warning(f"_handle_concurrent_jobs_changed called by non-QAction sender: {type(triggered_action)}")
+            return
+
+        num_jobs = triggered_action.data()
+
         if isinstance(num_jobs, int) and num_jobs > 0:
             config.settings.CONCURRENT_JOBS = num_jobs
             save_app_settings()
             if self.statusbar:
                 self.statusbar.showMessage(f"Max concurrent jobs set to {num_jobs}.")
+
+            for act in self.concurrent_job_actions:
+                if act is not triggered_action:
+                    act.setChecked(False)
+
+            if not triggered_action.isChecked():
+                triggered_action.setChecked(True)
         else:
             if utils.APP_LOGGER:
-                utils.APP_LOGGER.error(f"Invalid data for concurrent jobs action: {action.data()}")
+                utils.APP_LOGGER.error(f"Invalid data for concurrent jobs action: {triggered_action.data() if triggered_action else 'Unknown'}")
 
     def _ensure_thread_stopped(self):
         """Ensures the conversion thread is properly stopped."""
