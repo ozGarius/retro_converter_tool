@@ -12,68 +12,509 @@ try:
     from PySide6.QtUiTools import QUiLoader
     from PySide6.QtGui import QDragEnterEvent, QDropEvent
 except ImportError:
-    print("PySide6 not found. Basic UI elements might not work.", file=sys.stderr)
-    # Dummy classes - CORRECTED ORDER
+    print("PySide6 not found. Using dummy classes for parsing.", file=sys.stderr)
 
-    # Define Signal first as it's used by QDialogButtonBox
-    class Signal: def __init__(self, *args): pass;
+    # --- Begin Dummy PySide6 Classes ---
 
-    class QDialog: pass; class QListWidget: pass; class QListWidgetItem: pass;
-    class QLineEdit: pass; class QPushButton: pass; class QCheckBox: pass;
-    # QDialogButtonBox now defined after Signal
-    class QDialogButtonBox:
-        StandardButtonOk = 0x00000400
-        # Nested type for StandardButton enum
-        StandardButton = type("StandardButton", (), {
-            "Ok": StandardButtonOk,
-            "Yes": 0x00004000, # Add other standard buttons as needed by QMessageBox
-            "No": 0x00010000,
-            "Cancel": 0x00400000
-        })
-        Ok = StandardButtonOk # Alias for convenience
-        Yes = StandardButton.Yes
-        No = StandardButton.No
-        Cancel = StandardButton.Cancel
+    class Signal:
+        def __init__(self, *args):
+            pass
 
-        accepted = Signal(); rejected = Signal();
-        def button(self, role): return None
+        # Add connect, disconnect, emit if needed by any calling code, e.g.
+        # def connect(self, slot): pass
+        # def disconnect(self, slot): pass
+        # def emit(self, *args): pass
 
-    class QLabel: pass;
-    class QFileDialog:
-        Option = type("Option", (), {"ShowDirsOnly": 1, "DontUseNativeDialog": 2})
+    class QObject: # Base for many Qt classes, useful for dummying
+        def __init__(self, parent=None):
+            self.parent = parent
+        def signalsBlocked(self): # Used by playlistNameLineEdit
+            return False
+        def blockSignals(self, block: bool): # Used by playlistNameLineEdit
+            pass
+        def findChild(self, type, name): # Used by self.ui
+            return None
+        def menuBar(self): # Used by self.ui (if it were a QMainWindow)
+            return None # Or a dummy MenuBar instance
+        def windowTitle(self): # Used by self
+            return ""
+        def setWindowTitle(self, title): # Used by self
+            pass
+        # Add objectName, setObjectName if needed
+
+    class QWidget(QObject): # Many UI elements are QWidgets
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._layout = None # For dummy setLayout/layout
+            self._visible = True
+            self._enabled = True
+
+        def setLayout(self, layout):
+            self._layout = layout
+
+        def layout(self):
+            return self._layout
+
+        def show(self):
+            self._visible = True
+
+        def hide(self):
+            self._visible = False
+
+        def setVisible(self, visible:bool):
+            self._visible = visible
+
+        def setEnabled(self, enabled:bool):
+            self._enabled = enabled
+
+        def mapToGlobal(self, point): # If context menus were dummied
+            return point
+
+        def rect(self): # If sizes were needed
+            return (0,0,100,30) # x,y,w,h
+
+        def styleSheet(self): return ""
+        def setStyleSheet(self, sheet): pass
+        def update(self): pass
+        def repaint(self): pass
+        def font(self): return None # Dummy QFont
+        def setFont(self, font): pass
+        def close(self): pass
+        def deleteLater(self): pass
+
+
+    class QDialog(QWidget):
+        Accepted = 1
+        Rejected = 0
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.accepted = Signal()
+            self.rejected = Signal()
+            self._result = QDialog.Rejected
+
+        def exec(self): # exec_ was for older Qt/PyQt
+            self.show()
+            # In a real dummy event loop, this would block
+            return self._result
+
+        def accept(self):
+            self._result = QDialog.Accepted
+            self.accepted.emit()
+            self.close()
+
+        def reject(self):
+            self._result = QDialog.Rejected
+            self.rejected.emit()
+            self.close()
+
+        def setResult(self, res):
+            self._result = res
+
+        def done(self, res):
+            self.setResult(res)
+            self.close()
+
+    class QListWidgetItem:
+        def __init__(self, text=None, listview=None):
+            self._text = text if text is not None else ""
+            self._data = {}
+            self._flags = 0 # Dummy flags
+
+        def text(self):
+            return self._text
+
+        def setText(self, text):
+            self._text = text
+
+        def data(self, role):
+            return self._data.get(role)
+
+        def setData(self, role, value):
+            self._data[role] = value
+
+        def flags(self):
+            return self._flags
+
+        def setFlags(self, flags):
+            self._flags = flags
+
+    class QListWidget(QWidget):
+        class DragDropMode:
+            NoDragDrop = 0
+            DragOnly = 1
+            DropOnly = 2
+            DragDrop = 3
+            InternalMove = 4
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self._items = []
+            self.itemDoubleClicked = Signal(QListWidgetItem) # Example signal
+            self._model = QStandardItemModel() # Dummy model
+
+        def addItem(self, item_or_text):
+            if isinstance(item_or_text, QListWidgetItem):
+                self._items.append(item_or_text)
+            else:
+                self._items.append(QListWidgetItem(str(item_or_text)))
+
+        def item(self, row):
+            return self._items[row] if 0 <= row < len(self._items) else None
+
+        def count(self):
+            return len(self._items)
+
+        def selectedItems(self): # Simplified: returns all for dummy
+            return list(self._items)
+
+        def takeItem(self, row):
+            if 0 <= row < len(self._items):
+                return self._items.pop(row)
+            return None
+
+        def row(self, item):
+            try: return self._items.index(item)
+            except ValueError: return -1
+
+        def model(self): # Returns a dummy model
+            return self._model
+
+        def setDragEnabled(self, enable): pass
+        def setDropIndicatorShown(self, enable): pass
+        def setDragDropMode(self, mode): pass
+        def setDefaultDropAction(self, action): pass
+        def clear(self): self._items = []
+
+
+    class QLineEdit(QWidget):
+        def __init__(self, content="", parent=None):
+            super().__init__(parent)
+            self._text = content
+            self.textChanged = Signal(str) # Takes string
+            self.editingFinished = Signal()
+
+        def text(self):
+            return self._text
+
+        def setText(self, text):
+            new_text = str(text)
+            if self._text != new_text:
+                self._text = new_text
+                self.textChanged.emit(self._text)
+
+        def clear(self):
+            self.setText("")
+
+        def strip(self): # Not a real QLineEdit method, but used in app code
+            return self._text.strip()
+
+
+    class QPushButton(QWidget): # QAbstractButton is the true parent
+        def __init__(self, text="", parent=None):
+            super().__init__(parent)
+            self._text = text
+            self.clicked = Signal() # No arguments for clicked usually
+
+        def setText(self, text):
+            self._text = text
+
+        def text(self):
+            return self._text
+
+    class QCheckBox(QWidget): # QAbstractButton is the true parent
+        def __init__(self, text="", parent=None):
+            super().__init__(parent)
+            self._text = text
+            self._checked = False
+            self.toggled = Signal(bool) # Takes boolean
+
+        def isChecked(self):
+            return self._checked
+
+        def setChecked(self, checked_bool):
+            is_changing = self._checked != bool(checked_bool)
+            self._checked = bool(checked_bool)
+            if is_changing:
+                self.toggled.emit(self._checked)
+
+        def text(self): return self._text
+        def setText(self, text): self._text = text
+
+
+    class QDialogButtonBox(QWidget):
+        class StandardButton: # Nested class for enum
+            NoButton = 0x00000000
+            Ok = 0x00000400
+            Save = 0x00000800
+            SaveAll = 0x00001000
+            Open = 0x00002000
+            Yes = 0x00004000
+            No = 0x00010000
+            Abort = 0x00040000
+            Retry = 0x00080000
+            Ignore = 0x00100000
+            Close = 0x00200000
+            Cancel = 0x00400000
+            Discard = 0x00800000
+            Help = 0x01000000
+            Apply = 0x02000000
+            Reset = 0x04000000
+            RestoreDefaults = 0x08000000
+
+        # Make aliases available directly on QDialogButtonBox for convenience
+        Ok = StandardButton.Ok; Cancel = StandardButton.Cancel; Yes = StandardButton.Yes; No = StandardButton.No
+
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.accepted = Signal()
+            self.rejected = Signal()
+            self._buttons = {} # Store dummy buttons
+
+        def button(self, role_or_button): # role is StandardButton value
+            # This dummy just returns a new QPushButton if not found.
+            # A more complex dummy might store buttons added via addStandardButton.
+            if role_or_button not in self._buttons:
+                 self._buttons[role_or_button] = QPushButton(f"DummyBtn_{role_or_button}")
+            return self._buttons[role_or_button]
+
+        def setStandardButtons(self, buttons_bitmask): pass # For dummy
+        def addButton(self, text_or_button, role=None): pass # For dummy
+
+
+    class QLabel(QWidget):
+        def __init__(self, text="", parent=None):
+            super().__init__(parent)
+            self._text = text
+
+        def setText(self, text):
+            self._text = str(text)
+
+        def text(self):
+            return self._text
+
+        def setVisible(self, visible): # Already in QWidget dummy
+            super().setVisible(visible)
+
+
+    class QFileDialog(QDialog): # Inherits from QDialog for exec()
+        class Option: # Nested class for QFileDialog.Option
+            ShowDirsOnly = 1
+            DontResolveSymlinks = 2
+            DontConfirmOverwrite = 4
+            DontUseNativeDialog = 8 # Value might vary, example
+            ReadOnly = 16
+            HideNameFilterDetails = 32
+
+        def __init__(self, parent=None, caption="", directory="", filter=""):
+            super().__init__(parent)
+            self.setWindowTitle(caption)
+            self._directory = directory
+            self._filter = filter
+            self._selected_files = []
+
         @staticmethod
-        def getExistingDirectory(parent, caption, directory="", options=None): return ""
+        def getExistingDirectory(parent=None, caption="", directory="", options=Option.ShowDirsOnly):
+            # This dummy would need user input in a real test, or return a fixed path
+            print(f"Dummy QFileDialog.getExistingDirectory called (parent={parent}, caption='{caption}', dir='{directory}')")
+            return "/dummy/selected/directory"
+
         @staticmethod
-        def getSaveFileName(parent, caption, directory="", filter="", selectedFilter=None, options=None): return "", ""
-    class QMessageBox:
-        Information = 0; Warning = 1; Critical = 2; Question =3;
-        # Yes, No, Ok, Cancel values should match those defined in QDialogButtonBox.StandardButton for consistency if used directly
+        def getSaveFileName(parent=None, caption="", directory="", filter="", selectedFilter=None, options=0):
+            print(f"Dummy QFileDialog.getSaveFileName called (parent={parent}, caption='{caption}', dir='{directory}')")
+            return ("/dummy/save/file.m3u", "M3U Playlist Files (*.m3u *.m3u8)")
+
+        @staticmethod
+        def getOpenFileNames(parent=None, caption="", directory="", filter="", selectedFilter=None, options=0):
+            print(f"Dummy QFileDialog.getOpenFileNames called (parent={parent}, caption='{caption}', dir='{directory}')")
+            return (["/dummy/path/file1.txt", "/dummy/path/file2.img"], "All Files (*.*)")
+
+        def filesSelected(self): # Not a real method, but to simulate
+            return self._selected_files
+
+
+    class QMessageBox(QDialog): # Inherits from QDialog for exec()
+        # Use StandardButton values from QDialogButtonBox for consistency
+        NoButton = QDialogButtonBox.StandardButton.NoButton
+        Ok = QDialogButtonBox.StandardButton.Ok
+        Save = QDialogButtonBox.StandardButton.Save
+        # ... copy all required buttons from QDialogButtonBox.StandardButton
         Yes = QDialogButtonBox.StandardButton.Yes
         No = QDialogButtonBox.StandardButton.No
-        Ok = QDialogButtonBox.StandardButton.Ok
+        Abort = QDialogButtonBox.StandardButton.Abort
+        Retry = QDialogButtonBox.StandardButton.Retry
+        Ignore = QDialogButtonBox.StandardButton.Ignore
+        Close = QDialogButtonBox.StandardButton.Close
         Cancel = QDialogButtonBox.StandardButton.Cancel
-        # StandardButton type for QMessageBox can reference the one from QDialogButtonBox or be distinct
-        # For simplicity, let's assume QMessageBox uses these values directly.
+        Discard = QDialogButtonBox.StandardButton.Discard
+        Help = QDialogButtonBox.StandardButton.Help
+        Apply = QDialogButtonBox.StandardButton.Apply
+        Reset = QDialogButtonBox.StandardButton.Reset
+        RestoreDefaults = QDialogButtonBox.StandardButton.RestoreDefaults
+
+        # Icon enum
+        NoIcon = 0
+        Information = 1 # Value might vary
+        Warning = 2     # Value might vary
+        Critical = 3    # Value might vary
+        Question = 4    # Value might vary
+
+        # For static methods, parent is the first arg
+        @staticmethod
+        def critical(parent, title, text, buttons=Ok, defaultButton=NoButton):
+            print(f"DUMMY QMessageBox.CRITICAL: '{title}' - '{text}'")
+            # In a test, one might want to simulate a button press
+            return buttons # Or a specific button if interaction is needed for tests
 
         @staticmethod
-        def critical(parent, title, text, buttons=Ok, defaultButton=None): pass # Use aliased Ok
-        @staticmethod
-        def warning(parent, title, text, buttons=Ok, defaultButton=None): pass
-        @staticmethod
-        def information(parent, title, text, buttons=Ok, defaultButton=None): pass
-        @staticmethod
-        def question(parent, title, text, buttons=(Yes | No), defaultButton=No): return QMessageBox.No
+        def warning(parent, title, text, buttons=Ok, defaultButton=NoButton):
+            print(f"DUMMY QMessageBox.WARNING: '{title}' - '{text}'")
+            return buttons
 
-    class QVBoxLayout: pass; class QWidget: pass;
+        @staticmethod
+        def information(parent, title, text, buttons=Ok, defaultButton=NoButton):
+            print(f"DUMMY QMessageBox.INFORMATION: '{title}' - '{text}'")
+            return buttons
+
+        @staticmethod
+        def question(parent, title, text, buttons=(Yes | No), defaultButton=No):
+            print(f"DUMMY QMessageBox.QUESTION: '{title}' - '{text}'")
+            # This dummy needs to return one of the button values passed in `buttons`
+            if buttons & defaultButton: return defaultButton
+            if buttons & QMessageBox.Yes: return QMessageBox.Yes # Default to Yes if No not specified
+            return QMessageBox.No # Fallback
+
+    class QVBoxLayout(QObject): # QLayout is QObject, not QWidget
+        def __init__(self, parent_or_widget=None): # Can take a parent QWidget
+            super().__init__(parent_or_widget if not isinstance(parent_or_widget, QWidget) else None)
+            if isinstance(parent_or_widget, QWidget):
+                parent_or_widget.setLayout(self)
+            self._widgets = []
+        def addWidget(self, widget):
+            self._widgets.append(widget)
+        def insertWidget(self, index, widget):
+            self._widgets.insert(index, widget)
+        # Add other layout methods if needed: addLayout, addStretch, etc.
+
+    class QStandardItemModel(QObject): # For fileListWidget.model()
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.rowsMoved = Signal(QModelIndex, int, int, QModelIndex, int)
+            # Other signals: itemChanged, rowsInserted, etc.
+
     class Qt:
-        class WindowFlags: pass; class DropAction: pass; class ItemDataRole: UserRole = 1000;
-        class ItemFlag: ItemIsSelectable = 1; ItemIsEnabled = 32; ItemIsDragEnabled = 4;
-        class CheckState: pass;
+        class WindowFlags: # Empty for dummy
+            pass
+        class DropAction: # Used by fileListWidget.setDefaultDropAction
+            CopyAction = 1
+            MoveAction = 2
+            LinkAction = 4
+            IgnoreAction = 0
+        class ItemDataRole:
+            UserRole = 1000 # Or Qt.UserRole if Qt was fully dummied
+        class ItemFlag:
+            NoItemFlags = 0
+            ItemIsSelectable = 1
+            ItemIsEditable = 2
+            ItemIsDragEnabled = 4
+            ItemIsDropEnabled = 8
+            ItemIsUserCheckable = 16
+            ItemIsEnabled = 32
+            ItemIsTristate = 64
+        class CheckState:
+            Unchecked = 0
+            PartiallyChecked = 1
+            Checked = 2
+        # Other Qt enums if needed (e.g. AlignmentFlag, Key, etc.)
+        # For Qt.UserRole if directly used (instead of ItemDataRole.UserRole)
+        UserRole = ItemDataRole.UserRole
 
-    # Signal is already defined above
-    class QUrl: pass; class QMimeData: pass; class QUiLoader: pass;
-    class QDragEnterEvent: pass; class QDropEvent: pass; class QModelIndex: pass;
 
+    class QUrl:
+        def __init__(self, url_string=""):
+            self._url_string = url_string
+            self._is_local = url_string.startswith("file:")
+        def isLocalFile(self):
+            return self._is_local
+        def toLocalFile(self):
+            if self._is_local:
+                # Simplified, real parsing is more complex (file:///path, file:/path)
+                prefix = "file://"
+                if self._url_string.startswith(prefix):
+                    path = self._url_string[len(prefix):]
+                    if sys.platform.startswith("win") and path.startswith("/"): # "file:///C:/path"
+                        path = path[1:] # Remove leading / for C:/
+                    return path
+            return self._url_string # Fallback
+
+    class QMimeData:
+        def __init__(self):
+            self._urls = []
+            self._text = ""
+        def hasUrls(self):
+            return bool(self._urls)
+        def urls(self):
+            return self._urls
+        def setUrls(self, urls_list_of_qurl): # Takes list of QUrl
+            self._urls = urls_list_of_qurl
+        def text(self): return self._text
+        def setText(self, text): self._text = text
+        def hasText(self): return bool(self._text)
+        # Other formats: hasHtml, html, etc.
+
+    class QUiLoader:
+        def __init__(self):
+            self._error_string = ""
+        def load(self, ui_file_path_or_qfile, parentWidget=None):
+            # This dummy cannot actually load .ui files.
+            # It needs to return a QWidget-like object for self.ui to be assigned.
+            # For testing, it could return a pre-defined dummy widget structure.
+            # If ui_file_path_or_qfile is specific, can return specific dummy.
+            print(f"DUMMY QUiLoader.load('{ui_file_path_or_qfile}') called.")
+            # For the app to proceed, it must return an object that has findChild.
+            # A simple QWidget (or our dummy QObject/QWidget) can work if findChild is dummied there.
+
+            # If the main code does `self.ui = loader.load(...)` and then `self.ui.findChild(...)`,
+            # this dummy load must return something that has `findChild`.
+            # Simplest is to return a QWidget/QObject that has a dummy findChild.
+            # The dummy QObject already has findChild.
+
+            # Check if the ui_file_path exists for a more realistic dummy
+            if isinstance(ui_file_path_or_qfile, str) and not os.path.exists(ui_file_path_or_qfile):
+                self._error_string = f"UI file not found: {ui_file_path_or_qfile}"
+                return None # Simulate load failure
+
+            # Return a generic QObject/QWidget that can act as self.ui
+            # The calling code will then use self.ui.findChild to get actual elements.
+            # Our dummy QObject.findChild returns None, so the main code's error handling
+            # for missing UI elements will trigger. This is acceptable for a basic dummy.
+            return QWidget() # Or QObject() if QWidget has too many methods to dummy
+
+        def errorString(self):
+            return self._error_string
+
+    class QDragEnterEvent: # QDropEvent and QDragMoveEvent are similar
+        def __init__(self, mime_data=None):
+            self._mime_data = mime_data if mime_data else QMimeData()
+            self._accepted = False
+        def mimeData(self):
+            return self._mime_data
+        def acceptProposedAction(self):
+            self._accepted = True
+        def ignore(self):
+            self._accepted = False
+        # pos(), proposedAction(), possibleActions(), etc.
+
+    class QDropEvent(QDragEnterEvent): # Similar structure
+        def __init__(self, mime_data=None):
+            super().__init__(mime_data)
+        # dropAction(), setDropAction()
+
+    class QModelIndex: # Used as type hint for rowsMoved signal
+        def __init__(self):
+            pass
+        # isValid(), row(), column(), parent(), data(), etc.
+
+    # --- End Dummy PySide6 Classes ---
 try:
     from . import utils
 except ImportError:
