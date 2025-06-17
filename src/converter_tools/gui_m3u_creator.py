@@ -13,15 +13,31 @@ try:
     from PySide6.QtGui import QDragEnterEvent, QDropEvent
 except ImportError:
     print("PySide6 not found. Basic UI elements might not work.", file=sys.stderr)
-    # Dummy classes
+    # Dummy classes - CORRECTED ORDER
+
+    # Define Signal first as it's used by QDialogButtonBox
+    class Signal: def __init__(self, *args): pass;
+
     class QDialog: pass; class QListWidget: pass; class QListWidgetItem: pass;
     class QLineEdit: pass; class QPushButton: pass; class QCheckBox: pass;
+    # QDialogButtonBox now defined after Signal
     class QDialogButtonBox:
         StandardButtonOk = 0x00000400
-        StandardButton = type("StandardButton", (), {"Ok": StandardButtonOk})
-        Ok = StandardButtonOk
+        # Nested type for StandardButton enum
+        StandardButton = type("StandardButton", (), {
+            "Ok": StandardButtonOk,
+            "Yes": 0x00004000, # Add other standard buttons as needed by QMessageBox
+            "No": 0x00010000,
+            "Cancel": 0x00400000
+        })
+        Ok = StandardButtonOk # Alias for convenience
+        Yes = StandardButton.Yes
+        No = StandardButton.No
+        Cancel = StandardButton.Cancel
+
         accepted = Signal(); rejected = Signal();
         def button(self, role): return None
+
     class QLabel: pass;
     class QFileDialog:
         Option = type("Option", (), {"ShowDirsOnly": 1, "DontUseNativeDialog": 2})
@@ -31,21 +47,30 @@ except ImportError:
         def getSaveFileName(parent, caption, directory="", filter="", selectedFilter=None, options=None): return "", ""
     class QMessageBox:
         Information = 0; Warning = 1; Critical = 2; Question =3;
-        Yes = 0x00004000; No = 0x00010000;
-        StandardButton = type("StandardButton", (), {"Yes": Yes, "No": No, "Ok": 0x00000400, "Cancel": 0x00400000})
+        # Yes, No, Ok, Cancel values should match those defined in QDialogButtonBox.StandardButton for consistency if used directly
+        Yes = QDialogButtonBox.StandardButton.Yes
+        No = QDialogButtonBox.StandardButton.No
+        Ok = QDialogButtonBox.StandardButton.Ok
+        Cancel = QDialogButtonBox.StandardButton.Cancel
+        # StandardButton type for QMessageBox can reference the one from QDialogButtonBox or be distinct
+        # For simplicity, let's assume QMessageBox uses these values directly.
+
         @staticmethod
-        def critical(parent, title, text, buttons=StandardButton.Ok, defaultButton=None): pass
+        def critical(parent, title, text, buttons=Ok, defaultButton=None): pass # Use aliased Ok
         @staticmethod
-        def warning(parent, title, text, buttons=StandardButton.Ok, defaultButton=None): pass
+        def warning(parent, title, text, buttons=Ok, defaultButton=None): pass
         @staticmethod
-        def information(parent, title, text, buttons=StandardButton.Ok, defaultButton=None): pass
+        def information(parent, title, text, buttons=Ok, defaultButton=None): pass
         @staticmethod
-        def question(parent, title, text, buttons=(StandardButton.Yes | StandardButton.No), defaultButton=StandardButton.No): return QMessageBox.No
+        def question(parent, title, text, buttons=(Yes | No), defaultButton=No): return QMessageBox.No
+
     class QVBoxLayout: pass; class QWidget: pass;
-    class Qt: class WindowFlags: pass; class DropAction: pass; class ItemDataRole: UserRole = 1000;
-               class ItemFlag: ItemIsSelectable = 1; ItemIsEnabled = 32; ItemIsDragEnabled = 4;
-               class CheckState: pass;
-    class Signal: def __init__(self, *args): pass;
+    class Qt:
+        class WindowFlags: pass; class DropAction: pass; class ItemDataRole: UserRole = 1000;
+        class ItemFlag: ItemIsSelectable = 1; ItemIsEnabled = 32; ItemIsDragEnabled = 4;
+        class CheckState: pass;
+
+    # Signal is already defined above
     class QUrl: pass; class QMimeData: pass; class QUiLoader: pass;
     class QDragEnterEvent: pass; class QDropEvent: pass; class QModelIndex: pass;
 
