@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>M3UCreatorDialog</class>
- <widget class="QDialog" name="M3UCreatorDialog">
+ <widget class="QWidget" name="M3UCreatorMainWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -9,9 +8,6 @@
     <width>600</width>
     <height>450</height>
    </rect>
-  </property>
-  <property name="windowTitle">
-   <string>M3U Playlist Creator</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_Main">
    <item>
@@ -118,38 +114,4 @@
   </layout>
  </widget>
  <resources/>
- <connections>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>accepted()</signal>
-   <receiver>M3UCreatorDialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>248</x>
-     <y>254</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>157</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>rejected()</signal>
-   <receiver>M3UCreatorDialog</receiver>
-   <slot>reject()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>316</x>
-     <y>260</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>286</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
 </ui>
