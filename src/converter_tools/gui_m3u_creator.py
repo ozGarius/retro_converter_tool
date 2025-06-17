@@ -533,34 +533,67 @@ class M3UCreatorWindow(QDialog):
 
         if ui_file_path is None:
             ui_file_path = DEFAULT_UI_FILE_PATH
+        print(f"M3UCreatorWindow: Attempting to load UI from: {ui_file_path}") # DEBUG
+
         loader = QUiLoader()
+
         if not os.path.exists(ui_file_path):
+            print(f"M3UCreatorWindow: UI file NOT FOUND at: {ui_file_path}") # DEBUG
             QMessageBox.critical(self, "UI File Error", f"Could not find the UI file: {ui_file_path}")
             self._create_fallback_ui(); return
+
         try:
+            print(f"M3UCreatorWindow: Loading UI file...") # DEBUG
             loaded_ui = loader.load(ui_file_path, self)
+            print(f"M3UCreatorWindow: loader.load() result type: {type(loaded_ui)}") # DEBUG
+            if hasattr(loader, 'errorString') and loader.errorString(): # Check if errorString is not empty
+                print(f"M3UCreatorWindow: loader.errorString(): '{loader.errorString()}'") # DEBUG
+
             if not loaded_ui:
-                err_str = loader.errorString() if hasattr(loader, 'errorString') else "Unknown QUiLoader error"
+                print(f"M3UCreatorWindow: loader.load() returned None or falsy value.") # DEBUG
+                err_str = loader.errorString() if hasattr(loader, 'errorString') and loader.errorString() else "Unknown QUiLoader error (loaded_ui is None)"
                 QMessageBox.critical(self, "UI Load Error", f"loader.load() failed for {ui_file_path}\nError: {err_str}")
                 self._create_fallback_ui(); return
             self.ui = loaded_ui
+            print(f"M3UCreatorWindow: self.ui assigned, type: {type(self.ui)}") # DEBUG
         except Exception as e:
+            print(f"M3UCreatorWindow: Exception during loader.load(): {e}") # DEBUG
             QMessageBox.critical(self, "UI Load Error Exception", f"Could not load UI file: {ui_file_path}\nException: {e}")
             self._create_fallback_ui(); return
 
         self.setAcceptDrops(True)
+
         try:
+            print("M3UCreatorWindow: Finding child widgets...") # DEBUG
             self.playlistNameLineEdit = self.ui.findChild(QLineEdit, "playlistNameLineEdit")
+            print(f"M3UCreatorWindow: playlistNameLineEdit found: {self.playlistNameLineEdit is not None}") # DEBUG
+
             self.fileListWidget = self.ui.findChild(QListWidget, "fileListWidget")
+            print(f"M3UCreatorWindow: fileListWidget found: {self.fileListWidget is not None}") # DEBUG
+
             self.addFilesButton = self.ui.findChild(QPushButton, "addFilesButton")
+            print(f"M3UCreatorWindow: addFilesButton found: {self.addFilesButton is not None}") # DEBUG
+
             self.removeSelectedButton = self.ui.findChild(QPushButton, "removeSelectedButton")
+            print(f"M3UCreatorWindow: removeSelectedButton found: {self.removeSelectedButton is not None}") # DEBUG
+
             self.moveFilesCheckBox = self.ui.findChild(QCheckBox, "moveFilesCheckBox")
+            print(f"M3UCreatorWindow: moveFilesCheckBox found: {self.moveFilesCheckBox is not None}") # DEBUG
+
             self.hiddenFolderCheckBox = self.ui.findChild(QCheckBox, "hiddenFolderCheckBox")
+            print(f"M3UCreatorWindow: hiddenFolderCheckBox found: {self.hiddenFolderCheckBox is not None}") # DEBUG
+
             self.warningLabel = self.ui.findChild(QLabel, "warningLabel")
+            print(f"M3UCreatorWindow: warningLabel found: {self.warningLabel is not None}") # DEBUG
+
             self.buttonBox = self.ui.findChild(QDialogButtonBox, "buttonBox")
+            print(f"M3UCreatorWindow: buttonBox found: {self.buttonBox is not None}") # DEBUG
+
             critical_elements = {"playlistNameLineEdit": self.playlistNameLineEdit, "fileListWidget": self.fileListWidget,"addFilesButton": self.addFilesButton, "removeSelectedButton": self.removeSelectedButton,"moveFilesCheckBox": self.moveFilesCheckBox, "hiddenFolderCheckBox": self.hiddenFolderCheckBox,"warningLabel": self.warningLabel, "buttonBox": self.buttonBox,}
             missing_elements = [name for name, el in critical_elements.items() if el is None]
-            if missing_elements: self.ui = None; raise NameError(f"UI elements not found: {', '.join(missing_elements)}.")
+            if missing_elements:
+                print(f"M3UCreatorWindow: Missing critical UI elements: {missing_elements}") # DEBUG
+                self.ui = None; raise NameError(f"UI elements not found: {', '.join(missing_elements)}.")
         except NameError as e: QMessageBox.critical(self, "UI Element Error", str(e)); self._create_fallback_ui(); return
         except Exception as e: self.ui = None; QMessageBox.critical(self, "Unexpected UI Linkage Error", f"An error linking UI: {e}"); self._create_fallback_ui(); return
 
@@ -593,7 +626,23 @@ class M3UCreatorWindow(QDialog):
         if hasattr(self, 'moveFilesCheckBox') and self.moveFilesCheckBox:
             self.moveFilesCheckBox.toggled.connect(self._on_move_files_toggled)
 
+        # Debug prints for key widget properties (visibility, size) - BEFORE adjustSize
+        if self.playlistNameLineEdit: # Assuming self.playlistNameLineEdit could be None if UI setup failed
+            print(f"M3UCreatorWindow __init__ before adjustSize: playlistNameLineEdit.isVisible(): {self.playlistNameLineEdit.isVisible()}, .size(): {self.playlistNameLineEdit.size().width()}x{self.playlistNameLineEdit.size().height()}")
+        if self.fileListWidget:
+            print(f"M3UCreatorWindow __init__ before adjustSize: fileListWidget.isVisible(): {self.fileListWidget.isVisible()}, .size(): {self.fileListWidget.size().width()}x{self.fileListWidget.size().height()}")
+        print(f"M3UCreatorWindow __init__ before adjustSize: self.isVisible(): {self.isVisible()} (dialog itself), .size(): {self.size().width()}x{self.size().height()}")
+
+        self.adjustSize() # THE FIX: Add this line
+
+        print(f"M3UCreatorWindow __init__ after adjustSize: self.isVisible(): {self.isVisible()}, .size(): {self.size().width()}x{self.size().height()}")
+    # --- End of the main try block in __init__ ---
+    # The except blocks and _create_fallback_ui calls follow this.
+    # Note: The actual except blocks are part of the __init__ method structure and are not shown here for brevity,
+    # but the self.adjustSize() call and its surrounding prints are within the main try, before those excepts.
+
     def _create_fallback_ui(self):
+        print(">>> M3UCreatorWindow: _create_fallback_ui() CALLED <<<") # DEBUG
         if self.ui is not None:
              if hasattr(self.ui, 'hide'): self.ui.hide()
         self.ui = None
