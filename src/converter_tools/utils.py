@@ -335,7 +335,7 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                         _emit_or_print(
                             f"Removed temporary directory: \"{temp_path}\"", output_signal)
                         break
-                    except OSError as e:
+                    except OSError as e: # Ensure content below is aligned with this level + 1
                         retries -= 1
                         err_msg = f"Failed to remove temp directory {temp_path}: {e}"
                         if retries == 0:
@@ -345,10 +345,11 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                             _emit_or_print(
                                 f"WARNING: {err_msg}, retrying...", error_signal, fallback_color_code="yellow")
                             time.sleep(0.5)
-                    except Exception as e_unexpected_rm:
+                    except Exception as e_unexpected_rm: # Ensure content below is aligned with this level + 1
                         _emit_or_print(
                             f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
                         break
+        # Dedent the following 'else' block and its contents by one level
         else: # Not DEBUG_MODE, proceed with normal cleanup
             retries = 3
             while retries > 0:
@@ -358,19 +359,19 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                         f"Removed temporary directory: \"{temp_path}\"", output_signal)
                     break
                 except OSError as e:
-                retries -= 1
-                err_msg = f"Failed to remove temp directory {temp_path}: {e}"
-                if retries == 0:
+                    retries -= 1
+                    err_msg = f"Failed to remove temp directory {temp_path}: {e}"
+                    if retries == 0:
+                        _emit_or_print(
+                            f"ERROR: {err_msg} after multiple attempts.", error_signal, is_error=True)
+                    else:
+                        _emit_or_print(
+                            f"WARNING: {err_msg}, retrying...", error_signal, fallback_color_code="yellow")
+                        time.sleep(0.5)
+                except Exception as e_unexpected_rm:
                     _emit_or_print(
-                        f"ERROR: {err_msg} after multiple attempts.", error_signal, is_error=True)
-                else:
-                    _emit_or_print(
-                        f"WARNING: {err_msg}, retrying...", error_signal, fallback_color_code="yellow")
-                    time.sleep(0.5)
-            except Exception as e_unexpected_rm:
-                _emit_or_print(
-                    f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
-                break
+                        f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
+                    break
 
     if config.settings.DELETE_SOURCE_ON_SUCCESS and original_file_path and os.path.exists(original_file_path):
         files_to_delete = [original_file_path]
@@ -749,6 +750,7 @@ def _get_gdi_dependencies(gdi_file_path):
         _emit_or_print(f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
     except Exception as e:
+        # Correctly indent the following lines
         _emit_or_print(f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
 
