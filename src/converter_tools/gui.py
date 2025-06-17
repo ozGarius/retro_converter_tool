@@ -1,25 +1,28 @@
 # converter_tools/gui.py (Launcher Script - Revised)
 
 import sys
-import os
+# import os # No longer needed after path manipulation removal
 
 # --- Path Setup ---
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
+# script_dir = os.path.dirname(os.path.abspath(__file__)) # Removed
+# project_root = os.path.dirname(script_dir) # Removed
+#
+# if project_root not in sys.path: # Removed
+#     sys.path.insert(0, project_root) # Removed
+# if script_dir not in sys.path: # Removed
+#     sys.path.insert(0, script_dir) # Removed
 
 # Import the actual run_gui function from gui_main_window.py
 # This makes it available as converter_tools.gui.run_gui() for converter.py
 try:
-    from .gui_main_window import run_gui as actual_run_gui  # Rename to avoid conflict
+    from converter_tools.gui_main_window import run_gui as actual_run_gui  # Changed to absolute import
 except ImportError as e:
     print("FATAL ERROR: Could not import 'run_gui' from 'gui_main_window'.")
+    # The f-string below used script_dir which is now removed.
+    # We can remove the specific directory print or make it more generic.
+    # For now, let's make it more generic as the exact path isn't crucial if PYTHONPATH is correct.
     print(
-        f"Ensure 'gui_main_window.py' exists in the '{script_dir}' directory.")
+        f"Ensure 'gui_main_window.py' exists within the 'converter_tools' package.")
     print(f"Python's sys.path: {sys.path}")
     print(f"Details: {e}")
     try:
