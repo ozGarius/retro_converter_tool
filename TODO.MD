@@ -1,81 +1,79 @@
-# TODO List for Oz Converters
+# Retro Converter Tool - TODO & Progress
+This document tracks the remaining tasks, and future plans for the Retro Converter Tool, featuring a Qt6 GUI.
 
-## Completed Tasks (Session: 2024-07-23)
-
-*   **Debug Mode Enhancements**:
-    *   [x] Logging to `app_debug_YYYYMMDD_HHMMSS.log` in `./logs/` (configurable via `LOG_DIRECTORY` setting).
-    *   [x] Logs include timestamps, level, module, function name, and message. Captures commands, stdout/stderr, and internal errors.
-    *   [x] User prompt before temp folder cleanup when debug mode is enabled.
-*   **User Interface Memory**:
-    *   [x] Last used directory is persisted for file/folder dialogs (GUI & CLI) via `LAST_USED_DIRECTORY` setting.
-*   **Concurrent Job Processing (UI & Settings Only)**:
-    *   [x] "Jobs" menu added to GUI with "Concurrent Jobs" submenu.
-    *   [x] Options for 1 to CPU count (max 10) concurrent jobs, with current value (default 2) from `CONCURRENT_JOBS` setting checked.
-    *   [x] Preference saved in `converter_settings.json` and reflected in the status bar.
-    *   (Note: Actual concurrent processing logic is pending).
-*   **About Dialog**:
-    *   [x] Comprehensive About dialog added to GUI ("Help" > "About").
-    *   [x] Displays app name ("Oz Converters"), version ("1.1.0"), copyright, and Python version.
-    *   [x] Dynamically lists "Tools and Libraries Used" and "Third-Party Licenses" by parsing `README.MD`.
-    *   [x] Includes a clickable GitHub repository link.
-*   **README.md Content for About Dialog**:
-    *   [x] Ensured `README.MD` contains `### Tools and Libraries Used` and `### Third-Party Licenses` sections for the About Dialog.
-*   **Initial Settings for New Features**:
-    *   [x] Added `LOG_DIRECTORY` (default: `./logs/`) to `config.py`.
-    *   [x] Added `LAST_USED_DIRECTORY` (default: `None`) to `config.py`.
-    *   [x] Added `CONCURRENT_JOBS` (default: `2`) to `config.py`.
-
-## Recently Resolved (Prior to this session)
+## Recently Resolved
 *   **GDI File Parsing Bug:** Fixed issue where dependent files for .gdi formats (especially with quoted filenames containing spaces) were not correctly identified and copied to the temporary directory. This has been fully resolved.
 *   **Cue File Parsing Bug:** Ensured dependent files for .cue files are correctly identified and copied (this was part of the same fix series as GDI).
 
-## Ongoing / Partially Completed Tasks (from before this session)
-*   **Backend Logging & Error Display (Refinement Needed)**:
-    *   Status: Mechanism is largely in place (enhanced this session with file logging).
-    *   Next: Ongoing testing across all conversion routines and error conditions to ensure all tool outputs and internal messages are captured and displayed clearly. Consider if any specific errors warrant a dialog box in addition to a log message.
-*   **Further testing with all tools** to make sure they work as expected.
+## I. Ongoing / Partially Completed Tasks
++ Backend Logging & Error Display (Refinement Needed):
+    + Status: Mechanism is largely in place.
+    + Next: Thorough testing across all conversion routines and error conditions to ensure all tool outputs (stdout/stderr) and internal messages are captured comprehensively and displayed clearly and promptly in the GUI log. Consider if any specific errors warrant a dialog box in addition to a log message.
++ Further testing with all tools to make sure they work as expected.
 
-## Pending Tasks (Major Features)
+## II. Next Steps / Remaining Tasks
 
-*   **Core Functionality**:
-    *   [ ] Implement actual parallel/concurrent job processing logic based on the "Concurrent Jobs" setting.
-*   **Distribution & CI/CD**:
-    *   [ ] Configure PyInstaller (or alternative like cx_Freeze, Nuitka) for single executable compilation.
-        *   [ ] Test on target OS (Windows, macOS, Linux).
-        *   [ ] Optimize for file size.
-    *   [ ] Set up GitHub Actions workflow:
-        *   [ ] Trigger on releases, tags, manual dispatch.
-        *   [ ] Build for multiple OS.
-        *   [ ] Run tests (once available) before building.
-        *   [ ] Create executable artifacts and attach to GitHub releases.
-        *   [ ] Implement version numbering from git tags.
-*   **Testing**:
-    *   [ ] Write comprehensive unit tests for new backend functionality (logging, settings, utils functions).
-    *   [ ] Write integration tests for job processing (especially once concurrency is added).
-    *   [ ] Write/expand UI tests for dialogs, new menu interactions, and overall GUI flow.
-*   **"Get info from media" & "Verify media" Job Types**:
-    *   [ ] Define these new jobs and their associated media types in `menu_definitions.py`.
-    *   [ ] Create new corresponding functions in `conversions.py`.
-    *   [ ] Update `gui_worker.py` to handle text-based results from these jobs.
-    *   [ ] Determine how to display text output (GUI log, dialog, dedicated area).
-    *   [ ] Ensure "Output Folder" UI is correctly disabled/hidden.
-*   **UI Polish & Features (from original list)**:
-    *   [ ] UI Settings Persistence: Use QSettings (or similar) for UI-specific preferences (window size/position, checkbox states beyond what's in `config.settings.json`, selected job/media types if desired).
-    *   [ ] Drag and Drop: Allow adding files/folders by dragging them onto the file table.
-    *   [ ] Theming: Light/dark theme options.
-*   **Error Handling (General Review)**:
-    *   [ ] Review and enhance user-friendly error messages for all features.
-    *   [ ] Ensure graceful degradation if features fail (e.g., README parsing for About dialog).
-*   **Documentation**:
-    *   [ ] Update `README.MD` to reflect all new features, settings, and how to use them (separate from the About dialog content).
-    *   [ ] Document the CLI interface and its new features.
-*   **OS Compatibility**:
-    *   [ ] Expand testing and ensure full support for macOS and Linux (beyond initial PyInstaller builds).
++ Debug Mode Enhancement (Priority 1):
+    + Controlled by a setting (already partially in `config.settings.DEBUG_MODE`).
+    + When enabled, prompt you with "Continue with cleanup?" dialog before temp folder cleanup.
+    + Generate .log file containing timestamps, commands, outputs/results, and errors.
+    + Log file naming: `app_debug_YYYYMMDD_HHMMSS.log`.
+    + Save logs to user-configurable directory (default: `./logs/`, backend setting `LOG_DIRECTORY` added).
 
-## III. New Far Future Ideas (from original list):
-*   Queue Management (pause, resume, reorder).
-*   Plugin System for new formats/tools.
-*   .m3u creator
++ Implement "Get info from media" & "Verify media" Job Types:
+    + Define these new jobs and their associated media types in menu_definitions.py.
+    + Create new corresponding functions in conversions.py (e.g., get_media_info_routine, verify_media_routine).
+        + These functions will execute commands like `chdman info`.
+        + They should capture and return the text output from these commands.
+    + Update gui_worker.py:
+        + The system will need to handle jobs that return text instead of creating files.
+        + Decide how to display this text output to you (e.g., append to the main log, show in a separate read-only QTextEdit dialog, or a new dedicated area in the GUI if these jobs are frequently used) or saved to a file.
+        + Ensure the "Output Folder" section in the GUI is correctly disabled/hidden when these jobs are selected.
 
----
-(Existing content below this line was not present in the provided TODO.MD, so this acts as a clean end.)
++ Concurrent Job Processing (Priority 2):
+    + Add "Jobs" menu to main window menu bar.
+    + Submenu: "Concurrent Jobs" with options 1-10 (or user input).
+    + Default setting: 2 concurrent jobs (needs a new setting in `AppSettings`).
+    + Save your preference.
+    + Display active job count in status bar.
+    + Consider adding progress indicators for each active job.
+
++ About Dialog (Priority 3):
+    + Application name and version.
+    + Copyright information.
+    + Brief description.
+    + Third-party licenses section.
+    + Tools/libraries used (Python version, major dependencies).
+    + GitHub repository link (clickable).
+    + "Check for Updates" button (optional).
+    + Use standard dialog framework.
+
++ Packaging/Distribution (Single Executable Compilation - Priority 4):
+    + Create standalone executable distribution (PyInstaller recommended, alternatives: cx_Freeze, Nuitka).
+    + Single file executable preferred.
+    + Include all dependencies (PySide6, etc.) and external tools.
+    + Test on target OS.
+    + Consider file size optimization.
+
++ GitHub Actions Automation (Priority 4):
+    + Automated build pipeline triggered on releases, tags, manual dispatch.
+    + Build for multiple OS (Windows, macOS, Linux).
+    + Run tests before building.
+    + Create executable artifacts.
+    + Attach binaries to GitHub releases.
+    + Include version numbering from git tags.
+
++ Expand OS to macos and linux
+
+## UI Polish & Features:
++ Persistent Settings:
+    + Backend: Settings persistence in `config.py` has been refactored using an `AppSettings` class, improving robustness. Foundational support for `LOG_DIRECTORY` and `LAST_USED_DIRECTORY` has been added.
+    + GUI: Still need to use QSettings (or similar) to save and load UI-specific user preferences (window size/position, last used input/output folders (see `LAST_USED_DIRECTORY`), checkbox states, selected job/media types) between sessions.
++ User Interface Memory: Remember last used input/output directory (backend support via `LAST_USED_DIRECTORY` in `config.settings`).
++ Drag and Drop: Allow adding files/folders by dragging them onto the file table.
++ Theming: Light/dark theme options.
+
+## III. New Far Future Ideas:
++ Queue Management (pause, resume, reorder).
++ Plugin System for new formats/tools.
++ .m3u creator

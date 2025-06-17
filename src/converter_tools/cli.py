@@ -8,23 +8,12 @@ import os
 import sys
 
 try:
-    from . import config # Adjusted for potential package structure
-    from .config import save_app_settings # Specific import
-    from . import utils
-    from . import conversions
-    from . import menu_definitions
-except ImportError: # Fallback for direct script run or different structure
     import config
-    from config import save_app_settings
     import utils
     import conversions
     import menu_definitions
-except Exception as e: # Catch any other import error during the initial setup
-    # Attempt to use utils._emit_or_print if utils was imported, otherwise plain print
-    if 'utils' in locals() and hasattr(utils, '_emit_or_print'):
-        utils._emit_or_print(f"ERROR: cli.py failed to import modules: {e}", is_error=True)
-    else:
-        print(f"ERROR: cli.py failed to import modules: {e}")
+except ImportError as e:
+    utils._emit_or_print(f"ERROR: cli.py failed to import sibling modules: {e}", is_error=True)
     sys.exit(1)
 
 
@@ -116,58 +105,30 @@ def run_cli(input_path_from_args=None):
 
         # 3. Get Input Path
         input_ext_display = ", ".join([f".{ext}" for ext in selected_media_type_details.get("input_ext", ["*"])])
-        current_input_path_cli = None # Initialize
         while True:
-            suggestion_path_cli = ""
-            if config.settings.LAST_USED_DIRECTORY and os.path.isdir(config.settings.LAST_USED_DIRECTORY):
-                suggestion_path_cli = config.settings.LAST_USED_DIRECTORY
-
-            prompt_text_cli = f"Enter path to input file/folder (expects {input_ext_display})"
-            if suggestion_path_cli:
-                prompt_text_cli += f" [press Enter for: {suggestion_path_cli}]"
-
-            input_path_str = input(f"{prompt_text_cli}: ").strip().strip('"')
-
-            if not input_path_str and suggestion_path_cli: # User pressed Enter and suggestion exists
-                current_input_path_cli = suggestion_path_cli
-                utils._emit_or_print(f"Using suggested path: {current_input_path_cli}", fallback_color_code="cyan")
-            else:
-                current_input_path_cli = input_path_str
-
-            if not current_input_path_cli:
+            input_path = input(f"Enter path to input file/folder (expects {input_ext_display}): ").strip().strip('"')
+            if not input_path:
                 utils._emit_or_print("Input path cannot be empty.", is_error=True)
                 continue
-            if not os.path.exists(current_input_path_cli):
-                utils._emit_or_print(f"ERROR: Path not found: \"{current_input_path_cli}\"", is_error=True)
+            if not os.path.exists(input_path):
+                utils._emit_or_print(f"ERROR: Path not found: \"{input_path}\"", is_error=True)
                 retry_path = get_yes_no_input("Try again?", default_yes=True)
                 if not retry_path:
-                    current_input_path_cli = None  # Signal to go back
+                    input_path = None  # Signal to go back
                     break
                 else:
                     continue  # Retry input path
-
-            # Save the directory of the valid input path
-            path_to_save_for_cli = current_input_path_cli
-            if os.path.isfile(current_input_path_cli):
-                path_to_save_for_cli = os.path.dirname(current_input_path_cli)
-
-            if os.path.isdir(path_to_save_for_cli):
-                config.settings.LAST_USED_DIRECTORY = os.path.normpath(path_to_save_for_cli)
-                save_app_settings()
-
             # Basic type check (can be more robust)
-            if os.path.isfile(current_input_path_cli):
-                file_ext = os.path.splitext(current_input_path_cli)[1].lower().lstrip('.')
-                # Ensure selected_media_type_details.get("input_ext", []) is not empty before 'in' check
-                valid_input_exts_for_media = selected_media_type_details.get("input_ext", [])
-                if valid_input_exts_for_media and file_ext not in valid_input_exts_for_media:
+            if os.path.isfile(input_path):
+                file_ext = os.path.splitext(input_path)[1].lower().lstrip('.')
+                if file_ext not in selected_media_type_details.get("input_ext", []):
                     utils._emit_or_print(f"Warning: File extension '.{file_ext}' does not match expected types ({input_ext_display}).", fallback_color_code="\033[93m")
                     confirm_proceed = get_yes_no_input("Proceed anyway?", default_yes=False)
                     if not confirm_proceed:
                         continue  # Retry input path
             break  # Path is valid or user chose to proceed
 
-        if current_input_path_cli is None:
+        if input_path is None:
             continue  # Back to media type selection
 
         # 4. Choose Output File Type (if applicable)
@@ -219,44 +180,16 @@ def run_cli(input_path_from_args=None):
             output_in_same_folder = get_yes_no_input("\nOutput to same folder as input?", default_yes=True)
             if not output_in_same_folder:
                 while True:
-                    output_suggestion_cli = ""
-                    if config.settings.LAST_USED_DIRECTORY and os.path.isdir(config.settings.LAST_USED_DIRECTORY):
-                        output_suggestion_cli = config.settings.LAST_USED_DIRECTORY
-
-                    output_prompt_cli = "Enter custom output folder path"
-                    if output_suggestion_cli:
-                        output_prompt_cli += f" [press Enter for: {output_suggestion_cli}]"
-
-                    output_folder_path_str = input(f"{output_prompt_cli}: ").strip().strip('"')
-
-                    if not output_folder_path_str and output_suggestion_cli: # User pressed Enter
-                        output_folder_path_str = output_suggestion_cli
-                        utils._emit_or_print(f"Using suggested output path: {output_folder_path_str}", fallback_color_code="cyan")
-
-                    if not output_folder_path_str:
+                    output_folder_path = input("Enter custom output folder path: ").strip().strip('"')
+                    if not output_folder_path:
                         utils._emit_or_print("Output folder path cannot be empty.", is_error=True)
                         continue
-
-                    # Basic check, can be made more robust
-                    # Check if parent of the potential new dir exists, or if the path itself is an existing dir
-                    potential_parent = os.path.dirname(os.path.abspath(output_folder_path_str))
-                    if not os.path.isdir(output_folder_path_str) and not os.path.isdir(potential_parent):
-                        utils._emit_or_print(f"Parent directory for '{output_folder_path_str}' does not seem valid, or path is not an existing directory.", is_error=True)
-                        if not get_yes_no_input("Continue with this path anway (it might be created)?", default_yes=False):
+                    # Basic check, can be made more robust (e.g., check writability)
+                    if not os.path.isdir(os.path.dirname(os.path.abspath(output_folder_path))):  # Check if parent exists
+                        utils._emit_or_print(f"Parent directory for '{output_folder_path}' does not seem valid.", is_error=True)
+                        if not get_yes_no_input("Continue with this path?", default_yes=False):
                             continue
-
-                    explicit_output_dir = os.path.normpath(output_folder_path_str)
-
-                    # Save last used directory if a valid custom output folder is provided
-                    if explicit_output_dir and os.path.isdir(explicit_output_dir): # Check if it's a dir or becomes one
-                         config.settings.LAST_USED_DIRECTORY = explicit_output_dir
-                         save_app_settings()
-                    elif explicit_output_dir: # If it's not a dir yet, but path is accepted, save its parent
-                        parent_of_explicit_output_dir = os.path.dirname(explicit_output_dir)
-                        if os.path.isdir(parent_of_explicit_output_dir):
-                           config.settings.LAST_USED_DIRECTORY = parent_of_explicit_output_dir
-                           save_app_settings()
-
+                    explicit_output_dir = os.path.normpath(output_folder_path)
                     break
 
         # 7. Execute Conversion
@@ -266,13 +199,13 @@ def run_cli(input_path_from_args=None):
         if not callable(conversion_func):
             utils._emit_or_print(f"ERROR: Conversion function '{conversion_func_name}' not found or not callable.", is_error=True)
         else:
-            utils._emit_or_print(f"\nStarting job: {selected_job_name} - {selected_media_name} for '{os.path.basename(current_input_path_cli)}'...", fallback_color_code="\033[96m")
+            utils._emit_or_print(f"\nStarting job: {selected_job_name} - {selected_media_name} for '{os.path.basename(input_path)}'...", fallback_color_code="\033[96m")
             # Call utils.process_file directly
             # Note: utils.process_file uses config.DELETE_SOURCE_ON_SUCCESS and config.COPY_LOCALLY internally.
             # We pass allow_overwrite directly.
             # target_format_from_worker is the chosen primary output extension.
             utils.process_file(
-                current_input_path_cli, # Use the potentially updated input_path
+                input_path,
                 conversion_func,
                 target_format_out,  # This is the primary output format for moving
                 target_format_out2,  # This is the secondary output format for moving
