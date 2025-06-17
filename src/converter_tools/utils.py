@@ -21,9 +21,9 @@ def clean_filename_for_playlist(filename: str) -> str:
         r'\s*\(Unl(?:icensed)?\)\s*', # Unlicensed
         r'\s*\(Track\s*\d+\)\s*', r'\s*\(Bonus Disc\)\s*', r'\s*\(Game\s*\d*\)\s*',
         r'\s*\(Side\s*[AB12]\)\s*',
-        r'\(Demo\)\s*', r'\(Sample\)\s*', r'\(Promo\)\s*',
-        r'\(Enhanced\)\s*', r'\(Remastered\)\s*', r'\(Limited Edition\)\s*',
-        r'\(Collector's Edition\)\s*',
+        r'\(Demo\)\s*', r'\(Sample\)\s*', r'\(Promo)\s*',
+        r'\(Enhanced\)\s*', r'\(Remastered)\s*', r'\(Limited Edition)\s*',
+        r'\(Collector\'s Edition\)\s*',
         # Specific example from issue
         r'\s*\(\s*CD\s*\d+\s*of\s*\d+\s*\)\s*',
         r'\s*\(\s*Disc\s*\d+\s*of\s*\d+\s*\)\s*',
@@ -134,6 +134,56 @@ def get_free_disk_space_gb(folder_path: str) -> float | None:
         return None # Not Windows and no statvfs
     except Exception:
         return None # Other errors
+
+def check_tools_exist(tools_list: list[str]) -> bool:
+    """
+    Checks if all specified command-line tools are accessible.
+    If a tool is given as an absolute path, its existence is checked.
+    If a tool is given as a name, shutil.which is used to find it in PATH.
+    Prints messages for missing tools.
+    Returns True if all tools are found/accessible, False otherwise.
+    """
+    all_found = True
+    if not isinstance(tools_list, list):
+        print("Error: tools_list is not a list. Cannot check for tools.", file=sys.stderr)
+        return False
+
+    print("\nChecking for essential tools:")
+    for tool_specifier in tools_list:
+        tool_display_name = os.path.basename(tool_specifier) # For display
+        found_this_tool = False
+        location_info = ""
+
+        if os.path.isabs(tool_specifier):
+            if os.path.exists(tool_specifier):
+                # For files, also check if it's executable, though os.access might be tricky cross-platform esp. on Windows
+                # For now, os.path.exists for full paths is the main check from config.
+                if os.path.isfile(tool_specifier): # Ensure it's a file
+                    found_this_tool = True
+                    location_info = f"(at specified path: {tool_specifier})"
+                else:
+                    location_info = f"(specified path {tool_specifier} is not a file)"
+            else:
+                location_info = f"(specified path {tool_specifier} not found)"
+        else: # It's a name, try to find it in PATH
+            which_result = shutil.which(tool_specifier)
+            if which_result:
+                found_this_tool = True
+                location_info = f"(in PATH at: {which_result})"
+            else:
+                location_info = "(not found in PATH)"
+
+        if found_this_tool:
+            print(f"  [FOUND] {tool_display_name} {location_info}")
+        else:
+            print(f"  [MISSING] {tool_display_name} {location_info}")
+            all_found = False
+
+    if all_found:
+        print("All essential tools verified.")
+    else:
+        print("\nWarning: Some essential tools are missing or not configured correctly. Application functionality may be limited.")
+    return all_found
 
 if __name__ == '__main__':
     # Test clean_filename_for_playlist
