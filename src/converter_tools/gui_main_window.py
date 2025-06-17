@@ -19,6 +19,9 @@ try:
     from PySide6.QtGui import QAction, QKeySequence, QColor, QPalette, QCloseEvent, QIcon
     from PySide6.QtCore import Qt, Slot, Signal, QPoint
     from PySide6.QtUiTools import QUiLoader
+    # QMenu is already imported from PySide6.QtWidgets
+    # QAction is already imported from PySide6.QtGui
+    from .gui_m3u_creator import M3UCreatorWindow
 except ImportError as e:
     try:
         from PySide6.QtWidgets import QApplication, QMessageBox
@@ -247,7 +250,59 @@ class ConverterWindow(QMainWindow):
         self.update_ui_for_job_selection()
         if self.statusbar:
             self.statusbar.showMessage("Ready. Select a job type to begin.")
+
+        # --- Begin M3U Creator Integration ---
+        if hasattr(self, 'ui') and self.ui is not None and hasattr(self.ui, 'menuBar'):
+            main_menubar = self.ui.menuBar() # Use self.ui.menuBar()
+
+            tools_menu = None
+            # Iterate through existing top-level menu actions to find "Tools" menu
+            for action_iter_menu_find in main_menubar.actions(): # Renamed loop variable for clarity
+                menu_candidate = action_iter_menu_find.menu()
+                if menu_candidate and menu_candidate.title() == "&Tools":
+                    tools_menu = menu_candidate
+                    break
+
+            if tools_menu is None: # If not found, create it
+                tools_menu = main_menubar.addMenu("&Tools")
+
+            # Create and add the M3U Creator action
+            # Parent action to self.ui (the main QMainWindow object from .ui file)
+            self.actionM3UPlaylistCreator = QAction("M3U Playlist Creator...", self.ui)
+            self.actionM3UPlaylistCreator.setObjectName("actionM3UPlaylistCreator")
+            self.actionM3UPlaylistCreator.triggered.connect(self._open_m3u_creator)
+            tools_menu.addAction(self.actionM3UPlaylistCreator)
+        else:
+            # This else block is for debugging if the menu bar isn't found as expected.
+            if hasattr(self, 'log_output_text') and self.log_output_text:
+                self.log_output_text.append("<font color='orange'>Warning: Could not find menuBar on self.ui to add Tools menu for M3U Creator.</font>")
+            else:
+                print("DEBUG: Could not find menuBar on self.ui to add Tools menu for M3U Creator.", file=sys.stderr)
+        # --- End M3U Creator Integration ---
+
         self.ui.setWindowTitle("Converter Tool")
+
+    @Slot()
+    def _open_m3u_creator(self):
+        # Determine the correct parent: self.ui if it's the main widget from loader, otherwise self (QMainWindow)
+        parent_widget = self.ui if hasattr(self, 'ui') and self.ui is not None else self
+        try:
+            # M3UCreatorWindow's __init__ handles its own UI file loading by default
+            dialog = M3UCreatorWindow(parent=parent_widget)
+            dialog.exec() # Show as modal dialog
+        except Exception as e:
+            error_message = f"Could not open M3U Playlist Creator: {e}"
+            # Log to main window's log if available
+            if hasattr(self, 'log_output_text') and self.log_output_text:
+                self.log_output_text.append(f"<font color='red'>ERROR: {error_message}</font>")
+            else:
+                print(f"ERROR: {error_message}", file=sys.stderr)
+            # Also show a QMessageBox to the user
+            # Determine parent for QMessageBox carefully
+            parent_for_msgbox = self.ui if hasattr(self, 'ui') and self.ui is not None and isinstance(self.ui, QWidget) else self
+            if not isinstance(parent_for_msgbox, QWidget): # Final fallback if self.ui is not a QWidget
+                parent_for_msgbox = None
+            QMessageBox.critical(parent_for_msgbox, "M3U Creator Error", error_message)
 
     def _ensure_thread_stopped(self):
         """Ensures the conversion thread is properly stopped."""
