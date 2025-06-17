@@ -14,7 +14,7 @@ try:
         QPushButton, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView,
         QComboBox, QLabel, QTextEdit, QSizePolicy, QSpacerItem, QMenuBar,
         QFileDialog, QMessageBox, QStatusBar, QDialog, QDialogButtonBox,
-        QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar
+        QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar, QActionGroup
     )
     from PySide6.QtGui import QAction, QKeySequence, QColor, QPalette, QCloseEvent, QIcon
     from PySide6.QtCore import Qt, Slot, Signal, QPoint
@@ -37,7 +37,9 @@ except ImportError as e:
 
 # Core application modules
 from . import config
+from .config import save_app_settings # Specific import
 from . import utils
+# from .utils import extract_readme_sections # This will be removed
 from . import conversions
 from . import menu_definitions
 
@@ -237,8 +239,21 @@ class ConverterWindow(QMainWindow):
         self.selected_media_type_details = None
         self.active_input_filters = set()
         self.selected_output_filter = None
+        self.current_browse_location = os.path.expanduser("~/Documents") # Default
 
         # --- Initial UI Setup ---
+        # Load settings first (already implicitly done by importing config, but explicit call is good practice if it were deferred)
+        # config.load_app_settings() # This is typically done when config module is imported.
+
+        if config.settings.LAST_USED_DIRECTORY and os.path.isdir(config.settings.LAST_USED_DIRECTORY):
+            self.current_browse_location = config.settings.LAST_USED_DIRECTORY
+        else:
+            if config.settings.LAST_USED_DIRECTORY: # If it was set but invalid
+                if utils.APP_LOGGER:
+                    utils.APP_LOGGER.warning(f"Last used directory '{config.settings.LAST_USED_DIRECTORY}' is invalid. Falling back to Documents.")
+            config.settings.LAST_USED_DIRECTORY = None # Clear invalid path / ensure it's None if not set
+            # No save_app_settings() here, it's fine to save when a new valid dir is chosen or on app exit.
+
         self._populate_job_types()
         if self.delete_input_checkbox:
             self.delete_input_checkbox.setChecked(
@@ -249,7 +264,7 @@ class ConverterWindow(QMainWindow):
 
         self.update_ui_for_job_selection()
         if self.statusbar:
-            self.statusbar.showMessage("Ready. Select a job type to begin.")
+            self.statusbar.showMessage(f"Ready. Max Concurrent Jobs: {config.settings.CONCURRENT_JOBS}. Select a job type to begin.")
 
         # --- Begin M3U Creator Integration ---
         if hasattr(self, 'ui') and self.ui is not None and hasattr(self.ui, 'menuBar'):
@@ -281,6 +296,145 @@ class ConverterWindow(QMainWindow):
         # --- End M3U Creator Integration ---
 
         self.ui.setWindowTitle("Converter Tool")
+
+        # --- Jobs Menu ---
+        self.jobs_menu = QMenu("&Jobs", self.ui)
+
+        # --- Concurrent Jobs Submenu/Setting ---
+        self.concurrent_jobs_menu = QMenu("Concurrent Jobs", self.ui)
+        self.jobs_group = QActionGroup(self.concurrent_jobs_menu)
+        self.jobs_group.setExclusive(True)
+
+        max_jobs_options = range(1, (os.cpu_count() or 4) + 1)
+        if (os.cpu_count() or 0) > 10: # Cap at 10 if too many cores
+            max_jobs_options = range(1, 11)
+
+        for i in max_jobs_options:
+            action = QAction(f"{i} Job{'s' if i > 1 else ''}", self.concurrent_jobs_menu, checkable=True)
+            action.setData(i)
+            self.concurrent_jobs_menu.addAction(action)
+            self.jobs_group.addAction(action)
+            if i == config.settings.CONCURRENT_JOBS:
+                action.setChecked(True)
+
+        self.jobs_group.triggered.connect(self._handle_concurrent_jobs_changed)
+        self.jobs_menu.addMenu(self.concurrent_jobs_menu)
+
+        menu_bar = self.ui.menuBar()
+        if not menu_bar:
+            menu_bar = QMenuBar(self.ui)
+            # Assuming self.ui is the QMainWindow, so self.ui.setMenuBar.
+            # If self.ui is a QWidget loaded into a QMainWindow, it would be self.setMenuBar(menuBar)
+            if isinstance(self.ui, QMainWindow):
+                 self.ui.setMenuBar(menu_bar)
+            elif hasattr(self, 'setMenuBar'): # Check if the main window class has setMenuBar
+                 self.setMenuBar(menu_bar)
+
+        # --- Help Menu & About Action ---
+        self.help_menu = QMenu("&Help", self.ui)
+        self.actionAbout = QAction("&About", self.ui)
+        self.actionAbout.triggered.connect(self.show_about_dialog)
+        self.help_menu.addAction(self.actionAbout)
+
+        # Insert Jobs menu before Help menu if Help exists, otherwise append
+        # And then add Help menu itself
+        existing_help_menu_action = None
+        for action_in_bar in menu_bar.actions(): # Renamed to avoid conflict
+            if action_in_bar.menu() and action_in_bar.menu().title() == "&Help":
+                existing_help_menu_action = action_in_bar
+                break
+
+        if existing_help_menu_action: # This means a Help menu from .ui file might exist
+            # This case is tricky. If a Help menu is ALREADY on the bar from the .ui file,
+            # we might want to add our "About" to IT, or replace it.
+            # For now, let's assume if a "&Help" menu is found, we add our "Jobs" menu before it,
+            # and then we add our own new "Help" menu (which might result in two Help menus if one was in .ui).
+            # A cleaner way would be to findChild for a QMenu named "helpMenu" and add actionAbout to it.
+            # If the .ui file has a QMenu objectName="helpMenu", this is better:
+            # help_menu_from_ui = self.ui.findChild(QMenu, "helpMenu")
+            # if help_menu_from_ui:
+            #     self.help_menu = help_menu_from_ui # Use the one from UI
+            #     # Add "About" to it, ensuring no duplicates if this code runs multiple times (though __init__ shouldn't)
+            #     if not any(a.text() == "&About" for a in self.help_menu.actions()):
+            #          self.help_menu.addAction(self.actionAbout)
+            # else: # No "helpMenu" in UI, add our new one
+            #     menu_bar.addMenu(self.help_menu)
+            # For the current structure, let's add Jobs before existing Help, then add our new Help.
+            # This might lead to two Help menus if one is defined in the .ui file with the exact title "&Help".
+            # The provided code for Jobs menu insertion is:
+            # menu_bar.insertMenu(existing_help_menu_action, self.jobs_menu)
+            # This implies existing_help_menu_action is the action that *shows* the help menu.
+            # So, we insert Jobs menu before that action.
+            menu_bar.insertMenu(existing_help_menu_action, self.jobs_menu)
+            menu_bar.addMenu(self.help_menu) # Add our new Help menu
+        else: # No existing "&Help" menu action found, just add Jobs then Help
+            menu_bar.addMenu(self.jobs_menu)
+            menu_bar.addMenu(self.help_menu)
+
+
+    @Slot()
+    @Slot()
+    def show_about_dialog(self):
+        app_name = "Retro Converter Tool"
+        version = "1.1.0" # This might need to be dynamic later
+        copyright_text = "(c) 2023-2024 Ozymandias"
+
+        # Hardcoded strings for tools/libraries and licenses
+        tools_used_text = (
+            "- Python 3.x<br>"
+            "- PySide6 (for the GUI)<br>"
+            "- send2trash (for safe deletion)<br>"
+            "- 7-Zip (as 7za.exe, for archive handling)<br>"
+            "- DolphinTool.exe (for Nintendo Wii/GC formats)<br>"
+            "- chdman.exe (for MAME CHDs)<br>"
+            "- maxcso.exe (for CSO compression)"
+        )
+
+        licenses_text = (
+            "- PySide6: LGPL v3<br>"
+            "- send2trash: BSD License<br>"
+            "- 7-Zip (7za.exe): GNU LGPL + unRAR restriction<br>"
+            "- DolphinTool.exe: GPLv2+<br>"
+            "- chdman.exe: GPL-2.0+ (MAME specifics)<br>"
+            "- maxcso.exe: MIT License"
+        )
+
+        about_text = (
+            f"<h2>{app_name}</h2>"
+            f"<p><b>Version:</b> {version}</p>"
+            f"<p><b>Copyright:</b> {copyright_text}</p>"
+            f"<p>A tool for converting and managing media files.</p>"
+            f"<hr>"
+            f"<p><b>Python Version:</b><br>{sys.version.split()[0]}</p>"
+            f"<hr>"
+            f"<p><b>Tools and Libraries Used:</b><br>{tools_used_text}</p>"
+            f"<hr>"
+            f"<p><b>Third-Party Licenses:</b><br>{licenses_text}</p>"
+            f"<hr>"
+            f"<p><b>GitHub Repository:</b> <a href='https://github.com/OzymandiasTheGreat/oz-converters'>oz-converters on GitHub</a></p>"
+        )
+
+        msg_box = QMessageBox(self.ui if self.ui else self) # Use self.ui as parent
+        msg_box.setWindowTitle(f"About {app_name}")
+        msg_box.setTextFormat(Qt.TextFormat.RichText)
+        msg_box.setText(about_text)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        # Allow text selection and link interaction
+        msg_box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        msg_box.exec()
+
+    @Slot(QAction)
+    def _handle_concurrent_jobs_changed(self, action):
+        num_jobs = action.data()
+        if isinstance(num_jobs, int) and num_jobs > 0:
+            config.settings.CONCURRENT_JOBS = num_jobs
+            save_app_settings()
+            if self.statusbar:
+                self.statusbar.showMessage(f"Max concurrent jobs set to {num_jobs}.")
+        else:
+            if utils.APP_LOGGER:
+                utils.APP_LOGGER.error(f"Invalid data for concurrent jobs action: {action.data()}")
 
     @Slot()
     def _open_m3u_creator(self):
@@ -593,6 +747,8 @@ class ConverterWindow(QMainWindow):
             if self.progress_group_box:
                 self.progress_group_box.setVisible(False)
             self.update_convert_button_state()
+            if self.statusbar: # Update statusbar when UI is re-enabled
+                 self.statusbar.showMessage(f"Ready. Max Concurrent Jobs: {config.settings.CONCURRENT_JOBS}.")
         else:
             if self.media_type_combo:
                 self.media_type_combo.setEnabled(False)
@@ -921,11 +1077,16 @@ class ConverterWindow(QMainWindow):
     def _on_select_output_folder_clicked(self):
         if not self.output_folder_path_display:
             return
-        current_path = self.output_folder_path_display.text() or os.path.expanduser("~")
+        current_path = self.output_folder_path_display.text() or self.current_browse_location
         folder = QFileDialog.getExistingDirectory(
             self.ui, "Select Output Folder", current_path)
         if folder:
-            self.output_folder_path_display.setText(os.path.normpath(folder))
+            selected_dir = os.path.normpath(folder)
+            self.output_folder_path_display.setText(selected_dir)
+            self.current_browse_location = selected_dir
+            config.settings.LAST_USED_DIRECTORY = selected_dir
+            save_app_settings()
+            # self.update_convert_button_state() # This is called at the end of the original function
         self.update_convert_button_state()
 
     @Slot()
@@ -1062,16 +1223,27 @@ class ConverterWindow(QMainWindow):
         dialog_filter_string = f"{dialog_filter_name} ({' '.join(patterns)});;All Files (*.*)"
 
         files, _ = QFileDialog.getOpenFileNames(
-            self.ui, "Select Files", "", dialog_filter_string)
+            self.ui, "Select Files", self.current_browse_location, dialog_filter_string)
         if files:
             self.process_added_paths(files, from_add_files_dialog=True,
                                      dialog_filter_exts=current_input_exts_to_use_for_dialog)
+            # Update last used directory based on the first file's directory
+            selected_dir = os.path.dirname(files[0])
+            if os.path.isdir(selected_dir):
+                self.current_browse_location = selected_dir
+                config.settings.LAST_USED_DIRECTORY = selected_dir
+                save_app_settings()
+
 
     @Slot()
     def add_folder(self):
-        folder = QFileDialog.getExistingDirectory(self.ui, "Select Folder")
+        folder = QFileDialog.getExistingDirectory(self.ui, "Select Folder", self.current_browse_location)
         if folder:
-            self.process_added_paths([folder])
+            selected_dir = os.path.normpath(folder)
+            self.current_browse_location = selected_dir
+            config.settings.LAST_USED_DIRECTORY = selected_dir
+            save_app_settings()
+            self.process_added_paths([selected_dir]) # Use selected_dir here
 
     @Slot()
     def clear_input_list(self):

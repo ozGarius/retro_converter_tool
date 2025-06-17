@@ -120,6 +120,7 @@ DEFAULT_SETTINGS = {
     # New settings
     "LOG_DIRECTORY": "./logs/", # Relative to app root or a defined base path
     "LAST_USED_DIRECTORY": None, # Stores the last directory used for input/output
+    "CONCURRENT_JOBS": 2, # Number of jobs to process concurrently
 }
 
 
