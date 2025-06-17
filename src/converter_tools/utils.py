@@ -8,7 +8,7 @@ import glob
 import time
 import tempfile
 # import config # Changed to relative import
-from . import config
+from src.converter_tools import config # Changed to absolute import
 import re
 import logging
 import os # os is used for makedirs, ensure it's noted

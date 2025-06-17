@@ -4,8 +4,8 @@
 import os
 import glob
 import shutil
-import config  # Now contains all the detailed settings
-import utils
+from src.converter_tools import config # Changed to absolute import
+from src.converter_tools import utils # Changed to absolute import
 
 
 # --- Internal Helper for Archive Handling in Compression Routines ---

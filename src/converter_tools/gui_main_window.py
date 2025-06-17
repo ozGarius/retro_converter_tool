@@ -33,16 +33,16 @@ except ImportError as e:
     sys.exit(1)
 
 # Core application modules
-from . import config
-from .config import save_app_settings # Specific import
-from . import utils
-# from .utils import extract_readme_sections # This line is removed / confirmed removed
-from . import conversions
-from . import menu_definitions
+from src.converter_tools import config
+from src.converter_tools.config import save_app_settings # Specific import
+from src.converter_tools import utils
+# from src.converter_tools.utils import extract_readme_sections # This line is removed / confirmed removed
+from src.converter_tools import conversions
+from src.converter_tools import menu_definitions
 
 # GUI components from other files in this package
-from .gui_settings import SettingsDialog
-from .gui_worker import ConversionWorker, N_STAGES_PER_FILE
+from src.converter_tools.gui_settings import SettingsDialog
+from src.converter_tools.gui_worker import ConversionWorker, N_STAGES_PER_FILE
 
 # Constants for table columns
 COL_CHECK = 0
