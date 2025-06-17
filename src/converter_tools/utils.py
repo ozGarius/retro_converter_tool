@@ -7,8 +7,11 @@ import shutil
 import glob
 import time
 import tempfile
-import config
+# import config # Changed to relative import
+from . import config
 import re
+import logging
+import os # os is used for makedirs, ensure it's noted
 
 try:
     import send2trash
@@ -49,6 +52,15 @@ def _emit_or_print(message, signal=None, fallback_color_code=None, is_error=Fals
         else:
             print(f"\033[92m{message}\033[0m")  # Default success/info color
 
+    if APP_LOGGER and hasattr(config, 'settings') and config.settings.DEBUG_MODE:
+        # Ensure APP_LOGGER is not None and DEBUG_MODE is on
+        # The strip_ansi_codes function is assumed to be available in this file.
+        log_message = strip_ansi_codes(message)
+        if is_error:
+            APP_LOGGER.error(log_message)
+        else:
+            APP_LOGGER.info(log_message)
+
 
 def strip_ansi_codes(text):
     if not text:
@@ -57,6 +69,44 @@ def strip_ansi_codes(text):
         return ANSI_ESCAPE_RE.sub('', text)
     except Exception:
         return text
+
+
+# --- Logging Setup ---
+def setup_logging():
+    """
+    Sets up logging if DEBUG_MODE is True.
+    Creates a log file in LOG_DIRECTORY with a timestamp.
+    """
+    if not hasattr(config, 'settings') or not config.settings.DEBUG_MODE:
+        return None
+
+    try:
+        log_dir_path = config.settings.LOG_DIRECTORY
+        os.makedirs(log_dir_path, exist_ok=True)
+
+        log_filename = f"app_debug_{time.strftime('%Y%m%d_%H%M%S')}.log"
+        log_filepath = os.path.join(log_dir_path, log_filename)
+
+        logger = logging.getLogger("app_debug")
+
+        if logger.level == logging.NOTSET:
+             logger.setLevel(logging.DEBUG)
+
+        if not logger.handlers:
+            fh = logging.FileHandler(log_filepath, encoding='utf-8')
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(module)s:%(funcName)s:%(lineno)d] - %(message)s')
+            fh.setFormatter(formatter)
+            logger.addHandler(fh)
+        return logger
+    except Exception as e:
+        print(f"CRITICAL - Error setting up logging: {e}", flush=True)
+        return None
+
+APP_LOGGER = setup_logging()
+
+if APP_LOGGER:
+    APP_LOGGER.info("Logging initialized for app_debug.")
+# --- End Logging Setup ---
 
 
 def check_tools_exist(tools_list):
@@ -89,6 +139,11 @@ def get_free_disk_space_gb(path):
 
 
 def run_command(command, cwd=None, output_signal=None, error_signal=None, known_error_codes=None):
+    if APP_LOGGER and hasattr(config, 'settings') and config.settings.DEBUG_MODE:
+        APP_LOGGER.debug(f"Executing command: {' '.join(command)}")
+        if cwd:
+            APP_LOGGER.debug(f"Working directory: {cwd}")
+
     command_str = ' '.join(command)
     _emit_or_print(f">> Running: {command_str}",
                    output_signal, fallback_color_code="green")
@@ -101,11 +156,15 @@ def run_command(command, cwd=None, output_signal=None, error_signal=None, known_
         if stdout_clean:
             log_msg = f"--- STDOUT ---\n{stdout_clean}\n--------------"
             _emit_or_print(log_msg, output_signal)
+            if APP_LOGGER and hasattr(config, 'settings') and config.settings.DEBUG_MODE:
+                APP_LOGGER.debug(f"Command stdout: {stdout_clean}")
 
         stderr_clean = strip_ansi_codes(result.stderr.strip())
         if stderr_clean:
             log_msg = f"--- STDERR ---\n{stderr_clean}\n--------------"
             _emit_or_print(log_msg, error_signal, is_error=True)
+            if APP_LOGGER and hasattr(config, 'settings') and config.settings.DEBUG_MODE:
+                APP_LOGGER.warning(f"Command stderr: {stderr_clean}") # Use warning for stderr
 
         if result.returncode != 0:
             err_msg = f"ERROR: Command failed (code {result.returncode})"
@@ -118,10 +177,14 @@ def run_command(command, cwd=None, output_signal=None, error_signal=None, known_
         return True
     except FileNotFoundError:
         err_msg = f"ERROR: Command not found: {command[0]}"
+        if APP_LOGGER and hasattr(config, 'settings') and config.settings.DEBUG_MODE:
+            APP_LOGGER.error(f"Command not found: {command[0]}", exc_info=True)
         _emit_or_print(err_msg, error_signal, is_error=True)
         return False
     except Exception as e:
         err_msg = f"ERROR: Unexpected error running command: {e}"
+        if APP_LOGGER and hasattr(config, 'settings') and config.settings.DEBUG_MODE:
+            APP_LOGGER.error(f"Unexpected error running command {' '.join(command)}: {e}", exc_info=True)
         _emit_or_print(err_msg, error_signal, is_error=True)
         return False
 
@@ -242,14 +305,59 @@ def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal
 
 def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal=None):
     if temp_path and os.path.exists(temp_path):
-        retries = 3
-        while retries > 0:
+        if hasattr(config, 'settings') and config.settings.DEBUG_MODE:
+            prompt_message = f"DEBUG MODE: Temporary folder '{temp_path}' is about to be cleaned up. Continue with cleanup?"
+            if APP_LOGGER:
+                APP_LOGGER.info(prompt_message)
+
+            # Use _emit_or_print for visibility in GUI log, then input for actual choice
+            _emit_or_print(prompt_message, output_signal, fallback_color_code="yellow")
             try:
-                shutil.rmtree(temp_path)
-                _emit_or_print(
-                    f"Removed temporary directory: \"{temp_path}\"", output_signal)
-                break
-            except OSError as e:
+                user_choice = input(f"{prompt_message} (yes/no): ").strip().lower()
+            except RuntimeError: # Happens if sys.stdin is not available (e.g. some GUI contexts)
+                _emit_or_print("WARNING: Cannot read user input for debug cleanup prompt in this context. Defaulting to NO cleanup.", error_signal, fallback_color_code="yellow")
+                user_choice = "no" # Default to not cleaning up if input is not possible
+
+            if user_choice not in ['yes', 'y']:
+                if APP_LOGGER:
+                    APP_LOGGER.info(f"User chose NOT to cleanup temp folder: {temp_path}")
+                _emit_or_print(f"Skipping cleanup of temporary folder: {temp_path}", output_signal, fallback_color_code="yellow")
+                # Skip temp path removal, but continue to source file deletion logic
+            else:
+                # User chose 'yes', proceed with temp folder cleanup
+                if APP_LOGGER:
+                    APP_LOGGER.info(f"User chose to cleanup temp folder: {temp_path}")
+                _emit_or_print(f"Proceeding with cleanup of temporary folder: {temp_path}", output_signal, fallback_color_code="green")
+                retries = 3
+                while retries > 0:
+                    try:
+                        shutil.rmtree(temp_path)
+                        _emit_or_print(
+                            f"Removed temporary directory: \"{temp_path}\"", output_signal)
+                        break
+                    except OSError as e:
+                        retries -= 1
+                        err_msg = f"Failed to remove temp directory {temp_path}: {e}"
+                        if retries == 0:
+                            _emit_or_print(
+                                f"ERROR: {err_msg} after multiple attempts.", error_signal, is_error=True)
+                        else:
+                            _emit_or_print(
+                                f"WARNING: {err_msg}, retrying...", error_signal, fallback_color_code="yellow")
+                            time.sleep(0.5)
+                    except Exception as e_unexpected_rm:
+                        _emit_or_print(
+                            f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
+                        break
+        else: # Not DEBUG_MODE, proceed with normal cleanup
+            retries = 3
+            while retries > 0:
+                try:
+                    shutil.rmtree(temp_path)
+                    _emit_or_print(
+                        f"Removed temporary directory: \"{temp_path}\"", output_signal)
+                    break
+                except OSError as e:
                 retries -= 1
                 err_msg = f"Failed to remove temp directory {temp_path}: {e}"
                 if retries == 0:
