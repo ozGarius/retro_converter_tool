@@ -36,7 +36,7 @@ except ImportError as e:
 from . import config
 from .config import save_app_settings # Specific import
 from . import utils
-# from .utils import extract_readme_sections # This will be removed
+# from .utils import extract_readme_sections # This line is removed / confirmed removed
 from . import conversions
 from . import menu_definitions
 
@@ -348,6 +348,15 @@ class ConverterWindow(QMainWindow):
         app_name = "Retro Converter Tool"
         version = "1.1.0" # This might need to be dynamic later
         copyright_text = "(c) 2023-2024 Ozymandias"
+
+        # NOTE: The following lines related to README parsing are intentionally removed:
+        # base_path = os.path.dirname(__file__)
+        # project_root = os.path.dirname(os.path.dirname(base_path))
+        # readme_file_path = os.path.join(project_root, "README.md")
+        # readme_file_path = os.path.normpath(readme_file_path)
+        # readme_data = utils.extract_readme_sections(readme_path=readme_file_path)
+        # tools_used_from_readme = readme_data.get("tools_and_libraries", "Could not load from README.md")
+        # licenses_from_readme = readme_data.get("third_party_licenses", "Could not load from README.md")
 
         # Hardcoded strings for tools/libraries and licenses
         tools_used_text = (
