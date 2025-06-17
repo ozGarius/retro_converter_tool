@@ -749,8 +749,7 @@ def _get_gdi_dependencies(gdi_file_path):
     except IOError as e:
         _emit_or_print(f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
-    except Exception as e:
-        # Correctly indent the following lines
+    except Exception as e: # This is line 360 or near it
         _emit_or_print(f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
 
