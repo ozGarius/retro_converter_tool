@@ -571,7 +571,9 @@ class M3UCreatorWindow(QDialog):
         self.fileListWidget.setDragEnabled(True); self.fileListWidget.setDropIndicatorShown(True)
         self.fileListWidget.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self.fileListWidget.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.addFilesButton.clicked.connect(self._add_files)
+        # self.addFilesButton.clicked.connect(self._add_files) # Old connection
+        if hasattr(self, 'addFilesButton') and self.addFilesButton: # Check if button exists
+            self.addFilesButton.clicked.connect(self._add_files)
         self.removeSelectedButton.clicked.connect(self._remove_selected_files)
 
         if self.playlistNameLineEdit: self.playlistNameLineEdit.textChanged.connect(self._on_playlist_name_text_changed)
@@ -634,6 +636,14 @@ class M3UCreatorWindow(QDialog):
                 self.playlistNameLineEdit.clear()
                 self.playlistNameLineEdit.blockSignals(False)
             self.playlist_name_manually_edited = False
+
+    def _add_files(self):
+        if not self.fileListWidget:
+            QMessageBox.warning(self, "UI Error", "File list widget is not available.")
+            return
+        files, _ = QFileDialog.getOpenFileNames(self, "Select Files to Add", "", "All Files (*.*)")
+        if files:
+            self._add_files_to_list(files)
 
     def _add_files_to_list(self, file_paths: list[str]):
         if not self.fileListWidget: QMessageBox.warning(self, "UI Error", "File list widget is not available."); return
