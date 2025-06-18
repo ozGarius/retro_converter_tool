@@ -17,6 +17,26 @@ except ImportError:
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
+    # Patterns from M3UCreatorWindow._temporary_clean_filename
+    patterns = [
+        r'\s*\(Disc\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\(CD\s*\d*(?:\s*of\s*\d+)?\)\s*',
+        r'\s*\(Disk\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\[.*?\]\s*', # Square brackets and content
+        r'\s*\(.*Version.*\)\s*', r'\s*\(Beta\)\s*', r'\s*\(Proto\)\s*',
+        r'\s*\((?:USA|US|Europe|EU|Japan|JP|World)\)\s*', # Region tags
+        r'\s*\((?:En|Fr|De|Es|It|Nl|Pt|Sv|No|Da|Fi)\)\s*', # Common language tags
+        r'\s*\(Rev\s*[\w\.]+\)\s*', r'\s*\(Alternative?\)\s*', r'\s*\(Alt\)\s*', # Revision/Alt tags
+        r'\s*\(Unl(?:icensed)?\)\s*', # Unlicensed
+        r'\s*\(Track\s*\d+\)\s*', r'\s*\(Bonus Disc\)\s*', r'\s*\(Game\s*\d*\)\s*',
+        r'\s*\(Side\s*[AB12]\)\s*',
+        r'\(Demo\)\s*', r'\(Sample\)\s*', r'\(Promo)\s*',
+        r'\(Enhanced\)\s*', r'\(Remastered)\s*', r'\(Limited Edition)\s*',
+        r'\(Collector\'s Edition\)\s*',
+        # Specific example from issue
+        r'\s*\(\s*CD\s*\d+\s*of\s*\d+\s*\)\s*',
+        r'\s*\(\s*Disc\s*\d+\s*of\s*\d+\s*\)\s*',
+    ]
+    for pattern in patterns:
+        name = re.sub(pattern, '', name, flags=re.IGNORECASE)
 
 def _emit_or_print(message, signal=None, fallback_color_code=None, is_error=False):
     """
@@ -277,6 +297,75 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                         files_to_delete.append(bin_file)
                         _emit_or_print(
                             f">> Found associated file for deletion: \"{os.path.basename(bin_file)}\"", output_signal, fallback_color_code="green")
+
+
+def check_tools_exist(tools_list: list[str]) -> bool:
+    """
+    Checks if all specified command-line tools are accessible.
+    If a tool is given as an absolute path, its existence is checked.
+    If a tool is given as a name, shutil.which is used to find it in PATH.
+    Prints messages for missing tools.
+    Returns True if all tools are found/accessible, False otherwise.
+    """
+    all_found = True
+    if not isinstance(tools_list, list):
+        print("Error: tools_list is not a list. Cannot check for tools.", file=sys.stderr)
+        return False
+
+    print("\nChecking for essential tools:")
+    for tool_specifier in tools_list:
+        tool_display_name = os.path.basename(tool_specifier) # For display
+        found_this_tool = False
+        location_info = ""
+
+        if os.path.isabs(tool_specifier):
+            if os.path.exists(tool_specifier):
+                # For files, also check if it's executable, though os.access might be tricky cross-platform esp. on Windows
+                # For now, os.path.exists for full paths is the main check from config.
+                if os.path.isfile(tool_specifier): # Ensure it's a file
+                    found_this_tool = True
+                    location_info = f"(at specified path: {tool_specifier})"
+                else:
+                    location_info = f"(specified path {tool_specifier} is not a file)"
+            else:
+                location_info = f"(specified path {tool_specifier} not found)"
+        else: # It's a name, try to find it in PATH
+            which_result = shutil.which(tool_specifier)
+            if which_result:
+                found_this_tool = True
+                location_info = f"(in PATH at: {which_result})"
+            else:
+                location_info = "(not found in PATH)"
+
+        if found_this_tool:
+            print(f"  [FOUND] {tool_display_name} {location_info}")
+        else:
+            print(f"  [MISSING] {tool_display_name} {location_info}")
+            all_found = False
+
+    if all_found:
+        print("All essential tools verified.")
+    else:
+        print("\nWarning: Some essential tools are missing or not configured correctly. Application functionality may be limited.")
+    return all_found
+
+if __name__ == '__main__':
+    # Test clean_filename_for_playlist
+    test_names = [
+        "My Game (Disc 1 of 2) [USA]",
+        "Another Game (CD2)",
+        "Game Name (Europe) (Rev A) (Track 01)",
+        "Test [Proto] (Unknown Version)",
+        "  leading and trailing spaces  ",
+        "Game_With_Underscores",
+        "Empty () [] Test",
+        "",
+        "My Awesome Game (Demo) (Limited Edition) (Enhanced)",
+        "Final Game (Side A)",
+        "Game (CD 1 of 4)",
+    ]
+    for tn in test_names:
+        print(f"Original: '{tn}' -> Cleaned: '{clean_filename_for_playlist(tn)}'")
 
         for file_to_delete_path in files_to_delete:
             if not os.path.exists(file_to_delete_path):
