@@ -16,8 +16,9 @@ try:
         QFileDialog, QMessageBox, QStatusBar, QDialog, QDialogButtonBox,
         QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar
     )
-    from PySide6.QtGui import QAction, QKeySequence, QColor, QPalette, QCloseEvent, QIcon
-    from PySide6.QtCore import Qt, Slot, Signal, QPoint
+    from PySide6.QtGui import (QAction, QKeySequence, QColor, QPalette,
+                               QCloseEvent, QIcon, QDropEvent, QMimeData)
+    from PySide6.QtCore import Qt, Slot, Signal, QPoint # QMimeData is also in QtCore
     from PySide6.QtUiTools import QUiLoader
 except ImportError as e:
     try:
@@ -86,6 +87,7 @@ class ConverterWindow(QMainWindow):
             return
 
         self.ui.setAttribute(Qt.WA_DeleteOnClose, True)
+        self.ui.setAcceptDrops(True)  # Enable drag and drop for the main window
 
         # --- Find UI Elements ---
         self.job_type_combo = self.ui.findChild(QComboBox, "job_type_combo")
@@ -1236,6 +1238,38 @@ class ConverterWindow(QMainWindow):
             if app:
                 print("DEBUG: Calling app.quit() from closeEvent (no conversion).")
                 app.quit()
+
+    def dragEnterEvent(self, event):
+        """Handles drag enter events to accept only file/folder drops."""
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            if self.statusbar:
+                self.statusbar.showMessage("Drop files or folders here...")
+        else:
+            event.ignore()
+            if self.statusbar:
+                self.statusbar.showMessage("Drag ignored: Only files/folders are accepted.")
+
+    def dropEvent(self, event):
+        """Handles drop events to process dropped files/folders."""
+        paths = []
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    paths.append(url.toLocalFile())
+
+        if paths:
+            self.process_added_paths(paths)
+            event.acceptProposedAction()
+            if self.statusbar:
+                # process_added_paths already updates statusbar, so this might be redundant
+                # or could be more general like "Items dropped."
+                # For now, let's rely on process_added_paths's message.
+                pass # self.statusbar.showMessage(f"{len(paths)} item(s) dropped and processed.")
+        else:
+            event.ignore()
+            if self.statusbar:
+                self.statusbar.showMessage("Drop ignored: No valid local files or folders found.")
 
 
 def run_gui():
