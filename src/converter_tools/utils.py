@@ -17,8 +17,14 @@ except ImportError:
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
-# Patterns from M3UCreatorWindow._temporary_clean_filename
-patterns = [
+def clean_filename_for_playlist(filename: str) -> str:
+    if not filename:
+        return "playlist" # Default if input is empty
+
+    name = str(filename) # Ensure it's a string
+
+    # Patterns from M3UCreatorWindow._temporary_clean_filename
+    patterns = [
         r'\s*\(Disc\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\(CD\s*\d*(?:\s*of\s*\d+)?\)\s*',
         r'\s*\(Disk\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\[.*?\]\s*', # Square brackets and content
         r'\s*\(.*Version.*\)\s*', r'\s*\(Beta\)\s*', r'\s*\(Proto\)\s*',
@@ -35,9 +41,20 @@ patterns = [
         r'\s*\(\s*CD\s*\d+\s*of\s*\d+\s*\)\s*',
         r'\s*\(\s*Disc\s*\d+\s*of\s*\d+\s*\)\s*',
     ]
-name = ""
-for pattern in patterns:
-    name = re.sub(pattern, '', name, flags=re.IGNORECASE)
+    for pattern in patterns:
+        name = re.sub(pattern, '', name, flags=re.IGNORECASE)
+
+    # Remove any leading/trailing spaces, underscores, hyphens
+    name = name.strip(' _-')
+    # Replace multiple spaces or underscores with a single space
+    name = re.sub(r'[\s_]+', ' ', name)
+    # Normalize spacing around hyphens (e.g., "name - subtitle" to "name-subtitle" if desired, or keep space)
+    # For now, just ensure single space around them if they are meant to be word separators
+    name = re.sub(r'\s*-\s*', ' - ', name) # Ensures space around hyphen if present
+    name = name.strip() # Final strip
+
+    # If after all cleaning the name is empty, return a default
+    return name if name else "playlist"
 
 def _emit_or_print(message, signal=None, fallback_color_code=None, is_error=False):
     """
