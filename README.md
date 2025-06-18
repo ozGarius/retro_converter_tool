@@ -76,6 +76,33 @@ The tool leverages external utilities like CHDMAN (for CHD creation/extraction),
     * Download or copy the required executable files (`7za.exe`, `chdman.exe`, `DolphinTool.exe`, `maxcso.exe`, `recycle.exe`) into the `converter_tools/ext/` directory.
     * The paths to these tools are defined in `converter_tools/config.py` and can be adjusted if needed, but the default assumes they are in `converter_tools/ext/`.
 
+## Building from Source
+
+To create a standalone executable from the source code, you can use PyInstaller.
+
+1.  **Install PyInstaller**:
+    If you haven't already, install PyInstaller using pip. It's also recommended to install it within your project's virtual environment.
+    ```bash
+    pip install PyInstaller
+    ```
+    (Note: PyInstaller has been added to `requirements.txt` in this project, so you can also install it by running `pip install -r requirements.txt` in the project root.)
+
+2.  **Run the Build Command**:
+    Navigate to the root directory of the project in your terminal and run the following command:
+    ```bash
+    pyinstaller --onefile --windowed --name converter --icon src/converter_tools/assets/icons/app_icon.ico --add-data "src/converter_tools/assets:converter_tools/assets" --add-data "src/converter_tools/converter_settings.json:converter_tools" src/converter.py
+    ```
+    This command will:
+    * Create a single executable file (`--onefile`).
+    * Make it a windowed application, suppressing the console window (`--windowed`).
+    * Name the executable `converter.exe` (or `converter` on non-Windows) (`--name converter`).
+    * Set the application icon (`--icon src/converter_tools/assets/icons/app_icon.ico`).
+    * Bundle necessary assets and the default settings file (`--add-data`).
+    * Specify the main script (`src/converter.py`).
+
+3.  **Locate the Executable**:
+    After PyInstaller finishes, you will find the executable in a `dist` subdirectory within your project root (e.g., `dist/converter.exe`).
+
 ## Usage
 
 The application can be launched from the project's root directory using `converter.py`.
