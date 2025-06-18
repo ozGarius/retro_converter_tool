@@ -17,26 +17,27 @@ except ImportError:
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
-    # Patterns from M3UCreatorWindow._temporary_clean_filename
-    patterns = [
+# Patterns from M3UCreatorWindow._temporary_clean_filename
+patterns = [
         r'\s*\(Disc\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\(CD\s*\d*(?:\s*of\s*\d+)?\)\s*',
         r'\s*\(Disk\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\[.*?\]\s*', # Square brackets and content
         r'\s*\(.*Version.*\)\s*', r'\s*\(Beta\)\s*', r'\s*\(Proto\)\s*',
         r'\s*\((?:USA|US|Europe|EU|Japan|JP|World)\)\s*', # Region tags
         r'\s*\((?:En|Fr|De|Es|It|Nl|Pt|Sv|No|Da|Fi)\)\s*', # Common language tags
         r'\s*\(Rev\s*[\w\.]+\)\s*', r'\s*\(Alternative?\)\s*', r'\s*\(Alt\)\s*', # Revision/Alt tags
-        r'\s*\(Unl(?:icensed)?\)\s*', # Unlicensed
+        r'\s*\(Unl\(?:icensed\)?\)\s*', # Unlicensed
         r'\s*\(Track\s*\d+\)\s*', r'\s*\(Bonus Disc\)\s*', r'\s*\(Game\s*\d*\)\s*',
         r'\s*\(Side\s*[AB12]\)\s*',
-        r'\(Demo\)\s*', r'\(Sample\)\s*', r'\(Promo)\s*',
-        r'\(Enhanced\)\s*', r'\(Remastered)\s*', r'\(Limited Edition)\s*',
+        r'\(Demo\)\s*', r'\(Sample\)\s*', r'\(Promo\)\s*',
+        r'\(Enhanced\)\s*', r'\(Remastered\)\s*', r'\(Limited Edition\)\s*',
         r'\(Collector\'s Edition\)\s*',
         # Specific example from issue
         r'\s*\(\s*CD\s*\d+\s*of\s*\d+\s*\)\s*',
         r'\s*\(\s*Disc\s*\d+\s*of\s*\d+\s*\)\s*',
     ]
-    for pattern in patterns:
-        name = re.sub(pattern, '', name, flags=re.IGNORECASE)
+name = ""
+for pattern in patterns:
+    name = re.sub(pattern, '', name, flags=re.IGNORECASE)
 
 def _emit_or_print(message, signal=None, fallback_color_code=None, is_error=False):
     """
@@ -348,65 +349,6 @@ def check_tools_exist(tools_list: list[str]) -> bool:
     else:
         print("\nWarning: Some essential tools are missing or not configured correctly. Application functionality may be limited.")
     return all_found
-
-if __name__ == '__main__':
-    # Test clean_filename_for_playlist
-    test_names = [
-        "My Game (Disc 1 of 2) [USA]",
-        "Another Game (CD2)",
-        "Game Name (Europe) (Rev A) (Track 01)",
-        "Test [Proto] (Unknown Version)",
-        "  leading and trailing spaces  ",
-        "Game_With_Underscores",
-        "Empty () [] Test",
-        "",
-        "My Awesome Game (Demo) (Limited Edition) (Enhanced)",
-        "Final Game (Side A)",
-        "Game (CD 1 of 4)",
-    ]
-    for tn in test_names:
-        print(f"Original: '{tn}' -> Cleaned: '{clean_filename_for_playlist(tn)}'")
-
-        for file_to_delete_path in files_to_delete:
-            if not os.path.exists(file_to_delete_path):
-                continue
-
-            _emit_or_print(
-                f">> Attempting to send to Recycle Bin/Trash: \"{os.path.basename(file_to_delete_path)}\"", output_signal, fallback_color_code="green")
-            deleted_successfully_to_recycle = False
-            if send2trash:
-                try:
-                    send2trash.send2trash(file_to_delete_path)
-                    _emit_or_print(
-                        f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin/Trash.", output_signal)
-                    deleted_successfully_to_recycle = True
-                except Exception as e_s2t:
-                    _emit_or_print(
-                        f"WARNING: send2trash failed for \"{file_to_delete_path}\": {e_s2t}. Trying next method.", error_signal, fallback_color_code="yellow")
-
-            if not deleted_successfully_to_recycle and os.name == 'nt' and os.path.exists(config.TOOL_RECYCLE):
-                _emit_or_print(
-                    f">> Attempting to use recycle.exe for \"{file_to_delete_path}\"", output_signal, fallback_color_code="green")
-                recycle_success = run_command(
-                    [config.TOOL_RECYCLE, '-f', file_to_delete_path], output_signal=output_signal, error_signal=error_signal)
-                if recycle_success:
-                    _emit_or_print(
-                        f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin via recycle.exe.", output_signal)
-                    deleted_successfully_to_recycle = True
-                else:
-                    _emit_or_print(
-                        f"WARNING: recycle.exe failed for \"{file_to_delete_path}\". Trying permanent delete.", error_signal, fallback_color_code="yellow")
-
-            if not deleted_successfully_to_recycle:
-                _emit_or_print(
-                    f"WARNING: Recycle Bin/Trash methods failed or unavailable. Attempting permanent delete for \"{file_to_delete_path}\".", error_signal, fallback_color_code="yellow")
-                try:
-                    os.remove(file_to_delete_path)
-                    _emit_or_print(
-                        f"Source file \"{os.path.basename(file_to_delete_path)}\" permanently deleted.", output_signal, fallback_color_code="yellow")
-                except OSError as remove_e:
-                    _emit_or_print(
-                        f"ERROR: Failed to permanently delete source {file_to_delete_path}: {remove_e}", error_signal, is_error=True)
 
 
 def extract_archive(archive_path, output_dir, output_signal=None, error_signal=None):
@@ -734,3 +676,63 @@ def _get_gdi_dependencies(gdi_file_path):
         return []
 
     return dependencies
+
+if __name__ == '__main__':
+    # Test clean_filename_for_playlist
+    test_names = [
+        "My Game (Disc 1 of 2) [USA]",
+        "Another Game (CD2)",
+        "Game Name (Europe) (Rev A) (Track 01)",
+        "Test [Proto] (Unknown Version)",
+        "  leading and trailing spaces  ",
+        "Game_With_Underscores",
+        "Empty () [] Test",
+        "",
+        "My Awesome Game (Demo) (Limited Edition) (Enhanced)",
+        "Final Game (Side A)",
+        "Game (CD 1 of 4)",
+    ]
+    for tn in test_names:
+        print(f"Original: '{tn}' -> Cleaned: '{clean_filename_for_playlist(tn)}'")
+
+        for file_to_delete_path in files_to_delete:
+            if not os.path.exists(file_to_delete_path):
+                continue
+
+            _emit_or_print(
+                f">> Attempting to send to Recycle Bin/Trash: \"{os.path.basename(file_to_delete_path)}\"", output_signal, fallback_color_code="green")
+            deleted_successfully_to_recycle = False
+            if send2trash:
+                try:
+                    send2trash.send2trash(file_to_delete_path)
+                    _emit_or_print(
+                        f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin/Trash.", output_signal)
+                    deleted_successfully_to_recycle = True
+                except Exception as e_s2t:
+                    _emit_or_print(
+                        f"WARNING: send2trash failed for \"{file_to_delete_path}\": {e_s2t}. Trying next method.", error_signal, fallback_color_code="yellow")
+
+            if not deleted_successfully_to_recycle and os.name == 'nt' and os.path.exists(config.TOOL_RECYCLE):
+                _emit_or_print(
+                    f">> Attempting to use recycle.exe for \"{file_to_delete_path}\"", output_signal, fallback_color_code="green")
+                recycle_success = run_command(
+                    [config.TOOL_RECYCLE, '-f', file_to_delete_path], output_signal=output_signal, error_signal=error_signal)
+                if recycle_success:
+                    _emit_or_print(
+                        f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin via recycle.exe.", output_signal)
+                    deleted_successfully_to_recycle = True
+                else:
+                    _emit_or_print(
+                        f"WARNING: recycle.exe failed for \"{file_to_delete_path}\". Trying permanent delete.", error_signal, fallback_color_code="yellow")
+
+            if not deleted_successfully_to_recycle:
+                _emit_or_print(
+                    f"WARNING: Recycle Bin/Trash methods failed or unavailable. Attempting permanent delete for \"{file_to_delete_path}\".", error_signal, fallback_color_code="yellow")
+                try:
+                    os.remove(file_to_delete_path)
+                    _emit_or_print(
+                        f"Source file \"{os.path.basename(file_to_delete_path)}\" permanently deleted.", output_signal, fallback_color_code="yellow")
+                except OSError as remove_e:
+                    _emit_or_print(
+                        f"ERROR: Failed to permanently delete source {file_to_delete_path}: {remove_e}", error_signal, is_error=True)
+
