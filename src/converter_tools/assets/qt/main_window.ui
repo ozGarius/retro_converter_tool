@@ -503,18 +503,12 @@
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
-   <widget class="QMenu" name="menuJob">
-    <property name="title">
-     <string>Concurrent &amp;Job</string>
-    </property>
-   </widget>
    <widget class="QMenu" name="menuAbout">
     <property name="title">
      <string>&amp;About</string>
     </property>
    </widget>
    <addaction name="menuFile"/>
-   <addaction name="menuJob"/>
    <addaction name="menuAbout"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>

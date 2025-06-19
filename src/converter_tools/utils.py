@@ -17,44 +17,6 @@ except ImportError:
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
-def clean_filename_for_playlist(filename: str) -> str:
-    if not filename:
-        return "playlist" # Default if input is empty
-
-    name = str(filename) # Ensure it's a string
-
-    # Patterns from M3UCreatorWindow._temporary_clean_filename
-    patterns = [
-        r'\s*\(Disc\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\(CD\s*\d*(?:\s*of\s*\d+)?\)\s*',
-        r'\s*\(Disk\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\[.*?\]\s*', # Square brackets and content
-        r'\s*\(.*Version.*\)\s*', r'\s*\(Beta\)\s*', r'\s*\(Proto\)\s*',
-        r'\s*\((?:USA|US|Europe|EU|Japan|JP|World)\)\s*', # Region tags
-        r'\s*\((?:En|Fr|De|Es|It|Nl|Pt|Sv|No|Da|Fi)\)\s*', # Common language tags
-        r'\s*\(Rev\s*[\w\.]+\)\s*', r'\s*\(Alternative?\)\s*', r'\s*\(Alt\)\s*', # Revision/Alt tags
-        r'\s*\(Unl\(?:icensed\)?\)\s*', # Unlicensed
-        r'\s*\(Track\s*\d+\)\s*', r'\s*\(Bonus Disc\)\s*', r'\s*\(Game\s*\d*\)\s*',
-        r'\s*\(Side\s*[AB12]\)\s*',
-        r'\(Demo\)\s*', r'\(Sample\)\s*', r'\(Promo\)\s*',
-        r'\(Enhanced\)\s*', r'\(Remastered\)\s*', r'\(Limited Edition\)\s*',
-        r'\(Collector\'s Edition\)\s*',
-        # Specific example from issue
-        r'\s*\(\s*CD\s*\d+\s*of\s*\d+\s*\)\s*',
-        r'\s*\(\s*Disc\s*\d+\s*of\s*\d+\s*\)\s*',
-    ]
-    for pattern in patterns:
-        name = re.sub(pattern, '', name, flags=re.IGNORECASE)
-
-    # Remove any leading/trailing spaces, underscores, hyphens
-    name = name.strip(' _-')
-    # Replace multiple spaces or underscores with a single space
-    name = re.sub(r'[\s_]+', ' ', name)
-    # Normalize spacing around hyphens (e.g., "name - subtitle" to "name-subtitle" if desired, or keep space)
-    # For now, just ensure single space around them if they are meant to be word separators
-    name = re.sub(r'\s*-\s*', ' - ', name) # Ensures space around hyphen if present
-    name = name.strip() # Final strip
-
-    # If after all cleaning the name is empty, return a default
-    return name if name else "playlist"
 
 def _emit_or_print(message, signal=None, fallback_color_code=None, is_error=False):
     """
@@ -327,12 +289,13 @@ def check_tools_exist(tools_list: list[str]) -> bool:
     """
     all_found = True
     if not isinstance(tools_list, list):
-        print("Error: tools_list is not a list. Cannot check for tools.", file=sys.stderr)
+        print("Error: tools_list is not a list. Cannot check for tools.",
+              file=sys.stderr)
         return False
 
     print("\nChecking for essential tools:")
     for tool_specifier in tools_list:
-        tool_display_name = os.path.basename(tool_specifier) # For display
+        tool_display_name = os.path.basename(tool_specifier)  # For display
         found_this_tool = False
         location_info = ""
 
@@ -340,14 +303,14 @@ def check_tools_exist(tools_list: list[str]) -> bool:
             if os.path.exists(tool_specifier):
                 # For files, also check if it's executable, though os.access might be tricky cross-platform esp. on Windows
                 # For now, os.path.exists for full paths is the main check from config.
-                if os.path.isfile(tool_specifier): # Ensure it's a file
+                if os.path.isfile(tool_specifier):  # Ensure it's a file
                     found_this_tool = True
                     location_info = f"(at specified path: {tool_specifier})"
                 else:
                     location_info = f"(specified path {tool_specifier} is not a file)"
             else:
                 location_info = f"(specified path {tool_specifier} not found)"
-        else: # It's a name, try to find it in PATH
+        else:  # It's a name, try to find it in PATH
             which_result = shutil.which(tool_specifier)
             if which_result:
                 found_this_tool = True
@@ -424,12 +387,13 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
 
             for dep_path in dependencies_to_copy:
                 dep_filename = os.path.basename(dep_path)
-                temp_dep_dest_path = os.path.join(temp_path_for_this_file, dep_filename)
+                temp_dep_dest_path = os.path.join(
+                    temp_path_for_this_file, dep_filename)
                 try:
                     if not os.path.exists(dep_path):
                         _emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.",
                                        error_signal, fallback_color_code="yellow")
-                        continue # Skip to next dependency
+                        continue  # Skip to next dependency
 
                     _emit_or_print(f">> Copying dependent file \"{dep_filename}\" to \"{temp_dep_dest_path}\"",
                                    output_signal, fallback_color_code="green")
@@ -447,7 +411,7 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
                     output_signal=output_signal, error_signal=error_signal)
             return False
     else:
-        _emit_or_print(f">> Processing \"{file_name_base_with_ext}\" with outputs to temp. (COPY_LOCALLY=False)", # This check should use config.settings.COPY_LOCALLY implicitly by falling into else
+        _emit_or_print(f">> Processing \"{file_name_base_with_ext}\" with outputs to temp. (COPY_LOCALLY=False)",  # This check should use config.settings.COPY_LOCALLY implicitly by falling into else
                        output_signal, fallback_color_code="green")
 
     if stage_reporter:
@@ -593,6 +557,125 @@ def print_help(formats_in, format_out, format_out2=None):
     pass
 
 
+def clean_filename_for_playlist(filename: str) -> str:
+    if not filename:
+        return "playlist"  # Default if input is empty
+
+    name = str(filename)  # Ensure it's a string
+
+    # Patterns from M3UCreatorWindow._temporary_clean_filename
+    patterns = [
+        r'\s*\(Disc\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\(CD\s*\d*(?:\s*of\s*\d+)?\)\s*',
+        # Square brackets and content
+        r'\s*\(Disk\s*\d+(?:\s*of\s*\d+)?\)\s*', r'\s*\[.*?\]\s*',
+        r'\s*\(.*Version.*\)\s*', r'\s*\(Beta\)\s*', r'\s*\(Proto\)\s*',
+        r'\s*\((?:USA|US|Europe|EU|Japan|JP|World)\)\s*',  # Region tags
+        # Common language tags
+        r'\s*\((?:En|Fr|De|Es|It|Nl|Pt|Sv|No|Da|Fi)\)\s*',
+        # Revision/Alt tags
+        r'\s*\(Rev\s*[\w\.]+\)\s*', r'\s*\(Alternative?\)\s*', r'\s*\(Alt\)\s*',
+        r'\s*\(Unl(?:icensed)?\)\s*',  # Unlicensed
+        r'\s*\(Track\s*\d+\)\s*', r'\s*\(Bonus Disc\)\s*', r'\s*\(Game\s*\d*\)\s*',
+        r'\s*\(Side\s*[AB12]\)\s*',
+        r'\(Demo\)\s*', r'\(Sample\)\s*', r'\(Promo\)\s*',
+        r'\(Enhanced\)\s*', r'\(Remastered\)\s*', r'\(Limited Edition\)\s*',
+        r'\(Collector\'s Edition\)\s*',
+        # Specific example from issue
+        r'\s*\(\s*CD\s*\d+\s*of\s*\d+\s*\)\s*',
+        r'\s*\(\s*Disc\s*\d+\s*of\s*\d+\s*\)\s*',
+    ]
+    for pattern in patterns:
+        name = re.sub(pattern, '', name, flags=re.IGNORECASE)
+
+    # Remove any leading/trailing spaces, underscores, hyphens
+    name = name.strip(' _-')
+    # Replace multiple spaces or underscores with a single space
+    name = re.sub(r'[\s_]+', ' ', name)
+    # Normalize spacing around hyphens (e.g., "name - subtitle" to "name-subtitle" if desired, or keep space)
+    # For now, just ensure single space around them if they are meant to be word separators
+    # Ensures space around hyphen if present
+    name = re.sub(r'\s*-\s*', ' - ', name)
+    name = name.strip()  # Final strip
+
+    # If after all cleaning the name is empty, return a default
+    return name if name else "playlist"
+
+
+def set_folder_hidden_attribute(folder_path: str):
+    """
+    Sets the hidden attribute for a folder.
+    On Windows, uses ctypes to call SetFileAttributesW.
+    On Unix-like systems (Linux, macOS), prepends a '.' to the folder name if not already present.
+    Note: Renaming on Unix might fail if the target name exists or due to permissions.
+    """
+    if not os.path.isdir(folder_path):
+        # Or raise ValueError("Folder does not exist or is not a directory.")
+        print(
+            f"Warning: Folder '{folder_path}' not found or is not a directory. Cannot set hidden attribute.", file=sys.stderr)
+        return False
+
+    system_platform = sys.platform.lower()
+
+    try:
+        if system_platform.startswith("win"):  # Windows
+            FILE_ATTRIBUTE_HIDDEN = 0x02
+            # Ensure path is unicode for ctypes
+            ret = ctypes.windll.kernel32.SetFileAttributesW(
+                str(folder_path), FILE_ATTRIBUTE_HIDDEN)
+            if not ret:  # SetFileAttributes returns 0 on failure
+                # You might want to raise an exception here or get last error
+                # For now, just print error from ctypes.WinError()
+                error_code = ctypes.get_last_error()
+                ctypes_error = ctypes.WinError(error_code)
+                print(
+                    f"Error setting hidden attribute on '{folder_path}': {ctypes_error} (Code: {error_code})", file=sys.stderr)
+                return False
+            return True
+
+        # Linux or macOS
+        elif system_platform.startswith("linux") or system_platform.startswith("darwin"):
+            folder_basename = os.path.basename(folder_path)
+            folder_dirname = os.path.dirname(folder_path)
+
+            if not folder_basename.startswith("."):
+                new_hidden_name = "." + folder_basename
+                new_full_path = os.path.join(folder_dirname, new_hidden_name)
+
+                if os.path.exists(new_full_path):
+                    print(f"Warning: Cannot make '{folder_path}' hidden by renaming. "
+                          f"Target '{new_full_path}' already exists.", file=sys.stderr)
+                    return False  # Or True if it's already hidden effectively by existing dot folder
+
+                # shutil.move can rename directories
+                shutil.move(folder_path, new_full_path)
+                print(
+                    f"Info: Folder '{folder_path}' renamed to '{new_full_path}' to make it hidden.")
+                # Important: The calling code needs to be aware that folder_path has changed if this succeeds.
+                # This function should ideally return the new path if it changes.
+                # However, the plan was just to set it hidden.
+                # For now, this function's contract is just to try and hide it.
+                # The caller (M3UCreatorWindow) already has the new_folder_path which would be the dot-prefixed one
+                # if the playlist name itself started with a dot.
+                # This function is called AFTER the folder is created with its final name.
+                # So, if the final name was ".myplaylist", this function on Unix would do nothing.
+                # If the final name was "myplaylist", this renames it to ".myplaylist".
+            else:
+                # Folder already starts with a dot, considered hidden by convention
+                print(
+                    f"Info: Folder '{folder_path}' already starts with '.', considered hidden on Unix-like systems.")
+            return True
+
+        else:
+            print(
+                f"Unsupported platform: {system_platform}. Cannot set hidden attribute.", file=sys.stderr)
+            return False
+
+    except Exception as e:
+        print(
+            f"Exception while trying to set hidden attribute on '{folder_path}': {e}", file=sys.stderr)
+        return False
+
+
 def _get_cue_dependencies(cue_file_path):
     """
     Parses a .cue file and returns a list of absolute paths to dependent files.
@@ -621,16 +704,20 @@ def _get_cue_dependencies(cue_file_path):
                             abs_path = os.path.join(cue_dir, filename)
                             dependencies.append(os.path.normpath(abs_path))
                         else:
-                            _emit_or_print(f"Could not parse FILE line in CUE: {line}", is_error=True)
+                            _emit_or_print(
+                                f"Could not parse FILE line in CUE: {line}", is_error=True)
 
     except FileNotFoundError:
-        _emit_or_print(f"ERROR: CUE file not found: {cue_file_path}", is_error=True)
+        _emit_or_print(
+            f"ERROR: CUE file not found: {cue_file_path}", is_error=True)
         return []
     except IOError as e:
-        _emit_or_print(f"ERROR: Could not read CUE file: {cue_file_path} - {e}", is_error=True)
+        _emit_or_print(
+            f"ERROR: Could not read CUE file: {cue_file_path} - {e}", is_error=True)
         return []
     except Exception as e:
-        _emit_or_print(f"ERROR: Unexpected error processing CUE file: {cue_file_path} - {e}", is_error=True)
+        _emit_or_print(
+            f"ERROR: Unexpected error processing CUE file: {cue_file_path} - {e}", is_error=True)
         return []
 
     return dependencies
@@ -652,7 +739,8 @@ def _get_gdi_dependencies(gdi_file_path):
 
                 # Regex to capture essential parts, focusing on robust filename extraction.
                 # Groups: 1=track_num_str, 3=filename_quoted_content, 4=filename_unquoted
-                match = re.match(r'^\s*(\d+)\s+\S+\s+\S+\s+\S+\s+("([^"]+)"|([^\s"]+))(?:\s+.*)?$', line)
+                match = re.match(
+                    r'^\s*(\d+)\s+\S+\s+\S+\s+\S+\s+("([^"]+)"|([^\s"]+))(?:\s+.*)?$', line)
 
                 if match:
                     # track_num_str = match.group(1) # We don't strictly need the track number itself
@@ -666,15 +754,18 @@ def _get_gdi_dependencies(gdi_file_path):
                         filename = unquoted_filename
                     else:
                         # This case should ideally not be reached if regex matches and is well-formed.
-                        _emit_or_print(f"Could not parse filename from GDI line: {line}", signal=None, is_error=True) # Assuming no signal available here
+                        # Assuming no signal available here
+                        _emit_or_print(
+                            f"Could not parse filename from GDI line: {line}", signal=None, is_error=True)
                         continue
 
                     # The regex groups already handle stripping the quotes.
                     # Clean any potential leading/trailing whitespace from the extracted filename.
                     filename = filename.strip()
 
-                    if not filename: # Skip if filename ended up empty after strip
-                        _emit_or_print(f"Empty filename parsed from GDI line: {line}", signal=None, is_error=True)
+                    if not filename:  # Skip if filename ended up empty after strip
+                        _emit_or_print(
+                            f"Empty filename parsed from GDI line: {line}", signal=None, is_error=True)
                         continue
 
                     abs_path = os.path.join(gdi_dir, filename)
@@ -683,73 +774,16 @@ def _get_gdi_dependencies(gdi_file_path):
                 # (e.g., the first line with track count, comments, or malformed lines)
 
     except FileNotFoundError:
-        _emit_or_print(f"ERROR: GDI file not found: {gdi_file_path}", signal=None, is_error=True)
+        _emit_or_print(
+            f"ERROR: GDI file not found: {gdi_file_path}", signal=None, is_error=True)
         return []
     except IOError as e:
-        _emit_or_print(f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
+        _emit_or_print(
+            f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
     except Exception as e:
-        _emit_or_print(f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
+        _emit_or_print(
+            f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
         return []
 
     return dependencies
-
-if __name__ == '__main__':
-    # Test clean_filename_for_playlist
-    test_names = [
-        "My Game (Disc 1 of 2) [USA]",
-        "Another Game (CD2)",
-        "Game Name (Europe) (Rev A) (Track 01)",
-        "Test [Proto] (Unknown Version)",
-        "  leading and trailing spaces  ",
-        "Game_With_Underscores",
-        "Empty () [] Test",
-        "",
-        "My Awesome Game (Demo) (Limited Edition) (Enhanced)",
-        "Final Game (Side A)",
-        "Game (CD 1 of 4)",
-    ]
-    for tn in test_names:
-        print(f"Original: '{tn}' -> Cleaned: '{clean_filename_for_playlist(tn)}'")
-
-        for file_to_delete_path in files_to_delete:
-            if not os.path.exists(file_to_delete_path):
-                continue
-
-            _emit_or_print(
-                f">> Attempting to send to Recycle Bin/Trash: \"{os.path.basename(file_to_delete_path)}\"", output_signal, fallback_color_code="green")
-            deleted_successfully_to_recycle = False
-            if send2trash:
-                try:
-                    send2trash.send2trash(file_to_delete_path)
-                    _emit_or_print(
-                        f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin/Trash.", output_signal)
-                    deleted_successfully_to_recycle = True
-                except Exception as e_s2t:
-                    _emit_or_print(
-                        f"WARNING: send2trash failed for \"{file_to_delete_path}\": {e_s2t}. Trying next method.", error_signal, fallback_color_code="yellow")
-
-            if not deleted_successfully_to_recycle and os.name == 'nt' and os.path.exists(config.TOOL_RECYCLE):
-                _emit_or_print(
-                    f">> Attempting to use recycle.exe for \"{file_to_delete_path}\"", output_signal, fallback_color_code="green")
-                recycle_success = run_command(
-                    [config.TOOL_RECYCLE, '-f', file_to_delete_path], output_signal=output_signal, error_signal=error_signal)
-                if recycle_success:
-                    _emit_or_print(
-                        f"Source file \"{os.path.basename(file_to_delete_path)}\" sent to Recycle Bin via recycle.exe.", output_signal)
-                    deleted_successfully_to_recycle = True
-                else:
-                    _emit_or_print(
-                        f"WARNING: recycle.exe failed for \"{file_to_delete_path}\". Trying permanent delete.", error_signal, fallback_color_code="yellow")
-
-            if not deleted_successfully_to_recycle:
-                _emit_or_print(
-                    f"WARNING: Recycle Bin/Trash methods failed or unavailable. Attempting permanent delete for \"{file_to_delete_path}\".", error_signal, fallback_color_code="yellow")
-                try:
-                    os.remove(file_to_delete_path)
-                    _emit_or_print(
-                        f"Source file \"{os.path.basename(file_to_delete_path)}\" permanently deleted.", output_signal, fallback_color_code="yellow")
-                except OSError as remove_e:
-                    _emit_or_print(
-                        f"ERROR: Failed to permanently delete source {file_to_delete_path}: {remove_e}", error_signal, is_error=True)
-

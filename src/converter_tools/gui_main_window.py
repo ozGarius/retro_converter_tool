@@ -41,6 +41,7 @@ from . import menu_definitions
 # GUI components from other files in this package
 from .gui_settings import SettingsDialog
 from .gui_worker import ConversionWorker, N_STAGES_PER_FILE
+from .gui_m3u_creator import M3UCreatorWindow
 
 # Constants for table columns
 COL_CHECK = 0
@@ -89,32 +90,51 @@ class ConverterWindow(QMainWindow):
 
         # --- Find UI Elements ---
         self.job_type_combo = self.ui.findChild(QComboBox, "job_type_combo")
-        self.media_type_combo = self.ui.findChild(QComboBox, "media_type_combo")
-        self.add_files_button = self.ui.findChild(QPushButton, "add_files_button")
-        self.add_folder_button = self.ui.findChild(QPushButton, "add_folder_button")
-        self.recursive_checkbox = self.ui.findChild(QCheckBox, "recursive_checkbox")
-        self.input_file_types_label = self.ui.findChild(QLabel, "input_file_types_label")
-        self.select_input_types_button = self.ui.findChild(QPushButton, "select_input_types_button")
+        self.media_type_combo = self.ui.findChild(
+            QComboBox, "media_type_combo")
+        self.add_files_button = self.ui.findChild(
+            QPushButton, "add_files_button")
+        self.add_folder_button = self.ui.findChild(
+            QPushButton, "add_folder_button")
+        self.recursive_checkbox = self.ui.findChild(
+            QCheckBox, "recursive_checkbox")
+        self.input_file_types_label = self.ui.findChild(
+            QLabel, "input_file_types_label")
+        self.select_input_types_button = self.ui.findChild(
+            QPushButton, "select_input_types_button")
         self.file_table = self.ui.findChild(QTableWidget, "file_table")
 
-        self.output_folder_group_box = self.ui.findChild(QGroupBox, "output_folder_group_box")
-        self.select_output_folder_button = self.ui.findChild(QPushButton, "select_output_folder_button")
-        self.output_folder_path_display = self.ui.findChild(QLineEdit, "output_folder_path_display")
-        self.output_file_types_label = self.ui.findChild(QLabel, "output_file_types_label")
-        self.select_output_type_button = self.ui.findChild(QPushButton, "select_output_type_button")
+        self.output_folder_group_box = self.ui.findChild(
+            QGroupBox, "output_folder_group_box")
+        self.select_output_folder_button = self.ui.findChild(
+            QPushButton, "select_output_folder_button")
+        self.output_folder_path_display = self.ui.findChild(
+            QLineEdit, "output_folder_path_display")
+        self.output_file_types_label = self.ui.findChild(
+            QLabel, "output_file_types_label")
+        self.select_output_type_button = self.ui.findChild(
+            QPushButton, "select_output_type_button")
 
-        self.overwrite_files_checkbox = self.ui.findChild(QCheckBox, "overwrite_files_checkbox")
-        self.delete_input_checkbox = self.ui.findChild(QCheckBox, "delete_input_checkbox") 
-        self.output_same_folder_checkbox = self.ui.findChild(QCheckBox, "output_same_folder_checkbox")
+        self.overwrite_files_checkbox = self.ui.findChild(
+            QCheckBox, "overwrite_files_checkbox")
+        self.delete_input_checkbox = self.ui.findChild(
+            QCheckBox, "delete_input_checkbox")
+        self.output_same_folder_checkbox = self.ui.findChild(
+            QCheckBox, "output_same_folder_checkbox")
 
-        self.main_action_button = self.ui.findChild(QPushButton, "main_action_button")
-        self.toggle_log_button = self.ui.findChild(QPushButton, "toggle_log_button")
-        self.clear_log_button = self.ui.findChild(QPushButton, "clear_log_button")
+        self.main_action_button = self.ui.findChild(
+            QPushButton, "main_action_button")
+        self.toggle_log_button = self.ui.findChild(
+            QPushButton, "toggle_log_button")
+        self.clear_log_button = self.ui.findChild(
+            QPushButton, "clear_log_button")
         self.log_output_text = self.ui.findChild(QTextEdit, "log_output_text")
 
-        self.statusbar = self.ui.statusBar() if hasattr(self.ui, 'statusBar') and self.ui.statusBar() else QStatusBar(self.ui)
-        if not (hasattr(self.ui, 'statusBar') and self.ui.statusBar()): 
-             if isinstance(self.ui.layout(), QVBoxLayout): self.ui.layout().addWidget(self.statusbar)
+        self.statusbar = self.ui.statusBar() if hasattr(
+            self.ui, 'statusBar') and self.ui.statusBar() else QStatusBar(self.ui)
+        if not (hasattr(self.ui, 'statusBar') and self.ui.statusBar()):
+            if isinstance(self.ui.layout(), QVBoxLayout):
+                self.ui.layout().addWidget(self.statusbar)
 
         self.actionSettings = self.ui.findChild(QAction, "actionSettings")
         self.actionExit = self.ui.findChild(QAction, "actionExit")
@@ -247,7 +267,69 @@ class ConverterWindow(QMainWindow):
         self.update_ui_for_job_selection()
         if self.statusbar:
             self.statusbar.showMessage("Ready. Select a job type to begin.")
+
+        # --- Begin M3U Creator Integration ---
+        if hasattr(self, 'ui') and self.ui is not None and hasattr(self.ui, 'menuBar'):
+            main_menubar = self.ui.menuBar()  # Use self.ui.menuBar()
+
+            tools_menu = None
+            # Iterate through existing top-level menu actions to find "Tools" menu
+            for action_iter_menu_find in main_menubar.actions():  # Renamed loop variable for clarity
+                menu_candidate = action_iter_menu_find.menu()
+                if menu_candidate and menu_candidate.title() == "&Tools":
+                    tools_menu = menu_candidate
+                    break
+
+            if tools_menu is None:  # If not found, create it
+                tools_menu = main_menubar.addMenu("&Tools")
+
+            # Create and add the M3U Creator action
+            # Parent action to self.ui (the main QMainWindow object from .ui file)
+            self.actionM3UPlaylistCreator = QAction(
+                "M3U Playlist Creator...", self.ui)
+            self.actionM3UPlaylistCreator.setObjectName(
+                "actionM3UPlaylistCreator")
+            self.actionM3UPlaylistCreator.triggered.connect(
+                self._open_m3u_creator)
+            tools_menu.addAction(self.actionM3UPlaylistCreator)
+        else:
+            # This else block is for debugging if the menu bar isn't found as expected.
+            if hasattr(self, 'log_output_text') and self.log_output_text:
+                self.log_output_text.append(
+                    "<font color='orange'>Warning: Could not find menuBar on self.ui to add Tools menu for M3U Creator.</font>")
+            else:
+                print(
+                    "DEBUG: Could not find menuBar on self.ui to add Tools menu for M3U Creator.", file=sys.stderr)
+        # --- End M3U Creator Integration ---
+
         self.ui.setWindowTitle("Converter Tool")
+
+    @Slot()
+    def _open_m3u_creator(self):
+        # Determine the correct parent: self.ui if it's the main widget from loader, otherwise self (QMainWindow)
+        parent_widget = self.ui if hasattr(
+            self, 'ui') and self.ui is not None else self
+        try:
+            # M3UCreatorWindow's __init__ handles its own UI file loading by default
+            dialog = M3UCreatorWindow(parent=parent_widget)
+            dialog.exec()  # Show as modal dialog
+        except Exception as e:
+            error_message = f"Could not open M3U Playlist Creator: {e}"
+            # Log to main window's log if available
+            if hasattr(self, 'log_output_text') and self.log_output_text:
+                self.log_output_text.append(
+                    f"<font color='red'>ERROR: {error_message}</font>")
+            else:
+                print(f"ERROR: {error_message}", file=sys.stderr)
+            # Also show a QMessageBox to the user
+            # Determine parent for QMessageBox carefully
+            parent_for_msgbox = self.ui if hasattr(
+                self, 'ui') and self.ui is not None and isinstance(self.ui, QWidget) else self
+            # Final fallback if self.ui is not a QWidget
+            if not isinstance(parent_for_msgbox, QWidget):
+                parent_for_msgbox = None
+            QMessageBox.critical(
+                parent_for_msgbox, "M3U Creator Error", error_message)
 
     def _ensure_thread_stopped(self):
         """Ensures the conversion thread is properly stopped."""
@@ -1255,7 +1337,8 @@ def run_gui():
         app.setWindowIcon(QIcon(icon_path))  # Set the application-wide icon
         print(f"DEBUG: Application icon set from {icon_path}")
     else:
-        print(f"DEBUG: Application icon not found at {icon_path}. Using default system icon.")
+        print(
+            f"DEBUG: Application icon not found at {icon_path}. Using default system icon.")
 
     print(
         f"DEBUG (gui_main_window): Config SUBPROCESS_TIMEOUT: {config.settings.SUBPROCESS_TIMEOUT}")
@@ -1273,13 +1356,17 @@ def run_gui():
             f"DEBUG: Qt event loop finished. app.exec() returned: {exit_code}")
 
         active_threads = threading.enumerate()
-        print(f"DEBUG: Active threads before sys.exit() ({len(active_threads)}):")
+        print(
+            f"DEBUG: Active threads before sys.exit() ({len(active_threads)}):")
         for thread_item in active_threads:
-            print(f"  - Name: {thread_item.name}, Daemon: {thread_item.daemon}, Alive: {thread_item.is_alive()}")
+            print(
+                f"  - Name: {thread_item.name}, Daemon: {thread_item.daemon}, Alive: {thread_item.is_alive()}")
             if thread_item != threading.main_thread() and thread_item.is_alive() and not thread_item.daemon:
-                print(f"WARNING: Non-daemon thread '{thread_item.name}' is still alive. Python might hang if not handled.")
+                print(
+                    f"WARNING: Non-daemon thread '{thread_item.name}' is still alive. Python might hang if not handled.")
 
-        print(f"DEBUG: Calling sys.exit({exit_code}). Python process should terminate if all non-daemon threads are done.")
+        print(
+            f"DEBUG: Calling sys.exit({exit_code}). Python process should terminate if all non-daemon threads are done.")
         sys.exit(exit_code)
     else:
         print("DEBUG: Exiting due to UI load failure in ConverterWindow initialization.")
