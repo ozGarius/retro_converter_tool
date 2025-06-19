@@ -18,19 +18,157 @@ except ImportError:
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
-def _emit_or_print(message, signal=None, fallback_color_code=None, is_error=False):
+def _get_cue_dependencies(cue_file_path):
+    """
+    Parses a .cue file and returns a list of absolute paths to dependent files.
+    """
+    dependencies = []
+    cue_dir = os.path.dirname(cue_file_path)
+
+    try:
+        with open(cue_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("FILE"):
+                    # Try to extract filename using regex, handling quotes
+                    match = re.search(r'FILE\s+"?([^"]+)"?\s+\w+', line)
+                    if match:
+                        filename = match.group(1)
+                        # Construct absolute path
+                        abs_path = os.path.join(cue_dir, filename)
+                        dependencies.append(os.path.normpath(abs_path))
+                    else:
+                        # Fallback for lines that might not have quotes but are valid
+                        parts = line.split(maxsplit=2)
+                        if len(parts) > 1:
+                            # Remove potential surrounding quotes manually if regex failed
+                            filename = parts[1].strip('"')
+                            abs_path = os.path.join(cue_dir, filename)
+                            dependencies.append(os.path.normpath(abs_path))
+                        else:
+                            emit_or_print(
+                                f"Could not parse FILE line in CUE: {line}", is_error=True)
+
+    except FileNotFoundError:
+        emit_or_print(
+            f"ERROR: CUE file not found: {cue_file_path}", is_error=True)
+        return []
+    except IOError as e:
+        emit_or_print(
+            f"ERROR: Could not read CUE file: {cue_file_path} - {e}", is_error=True)
+        return []
+    except Exception as e:
+        emit_or_print(
+            f"ERROR: Unexpected error processing CUE file: {cue_file_path} - {e}", is_error=True)
+        return []
+
+    return dependencies
+
+
+def _get_gdi_dependencies(gdi_file_path):
+    """
+    Parses a .gdi file and returns a list of absolute paths to dependent track files.
+    """
+    dependencies = []
+    gdi_dir = os.path.dirname(gdi_file_path)
+
+    try:
+        with open(gdi_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            # The first line usually contains the number of tracks, which we can skip or parse if needed.
+            # For now, we'll just iterate through all lines.
+            for line_content in f:
+                line = line_content.strip()
+
+                # Regex to capture essential parts, focusing on robust filename extraction.
+                # Groups: 1=track_num_str, 3=filename_quoted_content, 4=filename_unquoted
+                match = re.match(
+                    r'^\s*(\d+)\s+\S+\s+\S+\s+\S+\s+("([^"]+)"|([^\s"]+))(?:\s+.*)?$', line)
+
+                if match:
+                    # track_num_str = match.group(1) # We don't strictly need the track number itself
+                    quoted_filename_content = match.group(3)
+                    unquoted_filename = match.group(4)
+
+                    filename = ""
+                    if quoted_filename_content is not None:
+                        filename = quoted_filename_content
+                    elif unquoted_filename is not None:
+                        filename = unquoted_filename
+                    else:
+                        # This case should ideally not be reached if regex matches and is well-formed.
+                        # Assuming no signal available here
+                        emit_or_print(
+                            f"Could not parse filename from GDI line: {line}", signal=None, is_error=True)
+                        continue
+
+                    # The regex groups already handle stripping the quotes.
+                    # Clean any potential leading/trailing whitespace from the extracted filename.
+                    filename = filename.strip()
+
+                    if not filename:  # Skip if filename ended up empty after strip
+                        emit_or_print(
+                            f"Empty filename parsed from GDI line: {line}", signal=None, is_error=True)
+                        continue
+
+                    abs_path = os.path.join(gdi_dir, filename)
+                    dependencies.append(os.path.normpath(abs_path))
+                # Silently ignore lines that don't match the expected GDI track format
+                # (e.g., the first line with track count, comments, or malformed lines)
+
+    except FileNotFoundError:
+        emit_or_print(
+            f"ERROR: GDI file not found: {gdi_file_path}", signal=None, is_error=True)
+        return []
+    except IOError as e:
+        emit_or_print(
+            f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
+        return []
+    except Exception as e:
+        emit_or_print(
+            f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
+        return []
+
+    return dependencies
+
+
+def _strip_ansi_codes(text):
+    if not text:
+        return ""
+    try:
+        return ANSI_ESCAPE_RE.sub('', text)
+    except Exception:
+        return text
+
+
+def emit_or_print(message, signal=None, fallback_color_code=None, is_error=False, type="NONE"):
     """
     Emits a message via a Qt signal if provided, otherwise prints to console.
     Optionally formats the fallback print message with a color code.
     If is_error is True, uses a default error color if no color_code is given.
+    DEBUG	Grey	Low-priority diagnostic information for developers.
+    INFO	Blue (or default text color)	Neutral, informational messages about routine operations.
+    SUCCESS	Green	Confirms that an operation completed successfully.
+    WARN	Yellow / Amber	Highlights potential issues that are not critical errors.
+    ERROR	Red	Indicates a critical failure or problem that needs immediate attention.
     """
     color_map = {
-        "red": "\033[91m", "green": "\033[92m", "blue": "\033[94m",
-        "yellow": "\033[93m", "magenta": "\033[95m", "cyan": "\033[96m",
-        "white": "\033[97m]", "black": "\033[30m",
-        "bright_red": "\033[1;91m", "bright_green": "\033[1;92m", "bright_blue": "\033[1;94m",
-        "bright_yellow": "\033[1;93m", "bright_magenta": "\033[1;95m", "bright_cyan": "\033[1;96m",
-        "bright_white": "\033[1;97m", "bold_red": "\033[1;31m", "italic_green": "\033[3;92m",
+        "red": "\033[91m",
+        "green": "\033[92m",
+        "blue": "\033[94m",
+        "yellow": "\033[93m",
+        "magenta": "\033[95m",
+        "cyan": "\033[96m",
+        "white": "\033[97m",
+        "black": "\033[30m",
+        "bright_red": "\033[1;91m",
+        "bright_green": "\033[1;92m",
+        "bright_blue": "\033[1;94m",
+        "bright_yellow": "\033[1;93m",
+        "bright_magenta": "\033[1;95m",
+        "bright_cyan": "\033[1;96m",
+        "bright_white": "\033[1;97m",
+        "bold_red": "\033[1;31m",
+        "italic_green": "\033[3;92m",
         "underline_blue": "\033[4;94m",
     }
 
@@ -44,30 +182,29 @@ def _emit_or_print(message, signal=None, fallback_color_code=None, is_error=Fals
 
         if color_code_to_use:
             print(f"{color_code_to_use}{message}\033[0m")
-        elif is_error:
+        elif is_error or type.upper() == "ERROR":
             print(f"\033[91m{message}\033[0m")  # Default error color
+        elif type.upper() == "WARN":
+            print(f"\033[93m{message}\033[0m")
+        elif type.upper() == "SUCCESS":
+            print(f"\033[92m{message}\033[0m")
+        elif type.upper() == "INFO":
+            print(f"\033[96m{message}\033[0m")
+        elif type.upper() == "DEBUG":
+            print(f"\033[95m{message}\033[0m")
         else:
-            print(f"\033[92m{message}\033[0m")  # Default success/info color
-
-
-def strip_ansi_codes(text):
-    if not text:
-        return ""
-    try:
-        return ANSI_ESCAPE_RE.sub('', text)
-    except Exception:
-        return text
+            print(f"\033[0m{message}\033[0m")  # Default color
 
 
 def check_tools_exist(tools_list):
     missing_tools = [tool for tool in tools_list if not os.path.exists(tool)]
     if missing_tools:
-        _emit_or_print("ERROR: Missing required tools:", is_error=True)
+        emit_or_print("ERROR: Missing required tools:", is_error=True)
         for tool in missing_tools:
-            _emit_or_print(f"- {tool}", is_error=True)
-        _emit_or_print(
+            emit_or_print(f"- {tool}", is_error=True)
+        emit_or_print(
             "Ensure 'converter_tools' folder is in the same directory and contains all executables.", is_error=True)
-        _emit_or_print(
+        emit_or_print(
             f"Expected tools directory: {config.TOOLS_DIR}", is_error=True)
         return False
     return True
@@ -79,33 +216,33 @@ def get_free_disk_space_gb(path):
         free_gb = stat.free / (1024**3)
         return free_gb
     except AttributeError:
-        _emit_or_print(
+        emit_or_print(
             "shutil.disk_usage not available to check disk space.", is_error=True)
         return None
     except Exception as e:
-        _emit_or_print(
+        emit_or_print(
             f"Error checking disk space for {path}: {e}", is_error=True)
         return None
 
 
 def run_command(command, cwd=None, output_signal=None, error_signal=None, known_error_codes=None):
     command_str = ' '.join(command)
-    _emit_or_print(f">> Running: {command_str}",
+    emit_or_print(f">> Running: {command_str}",
                    output_signal, fallback_color_code="green")
 
     try:
         result = subprocess.run(
             command, cwd=cwd, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace'
         )
-        stdout_clean = strip_ansi_codes(result.stdout.strip())
+        stdout_clean = _strip_ansi_codes(result.stdout.strip())
         if stdout_clean:
             log_msg = f"--- STDOUT ---\n{stdout_clean}\n--------------"
-            _emit_or_print(log_msg, output_signal)
+            emit_or_print(log_msg, output_signal)
 
-        stderr_clean = strip_ansi_codes(result.stderr.strip())
+        stderr_clean = _strip_ansi_codes(result.stderr.strip())
         if stderr_clean:
             log_msg = f"--- STDERR ---\n{stderr_clean}\n--------------"
-            _emit_or_print(log_msg, error_signal, is_error=True)
+            emit_or_print(log_msg, error_signal, is_error=True)
 
         if result.returncode != 0:
             err_msg = f"ERROR: Command failed (code {result.returncode})"
@@ -113,16 +250,16 @@ def run_command(command, cwd=None, output_signal=None, error_signal=None, known_
                 err_msg += f": {known_error_codes[result.returncode]}"
             elif stderr_clean and stderr_clean not in err_msg:
                 err_msg += f"\nTool Output (stderr):\n{stderr_clean}"
-            _emit_or_print(err_msg, error_signal, is_error=True)
+            emit_or_print(err_msg, error_signal, is_error=True)
             return False
         return True
     except FileNotFoundError:
         err_msg = f"ERROR: Command not found: {command[0]}"
-        _emit_or_print(err_msg, error_signal, is_error=True)
+        emit_or_print(err_msg, error_signal, is_error=True)
         return False
     except Exception as e:
         err_msg = f"ERROR: Unexpected error running command: {e}"
-        _emit_or_print(err_msg, error_signal, is_error=True)
+        emit_or_print(err_msg, error_signal, is_error=True)
         return False
 
 
@@ -140,31 +277,31 @@ def create_temp_dir(base_name_of_input_file, output_signal=None, error_signal=No
     else:
         temp_base_for_this_file = config.settings.MAIN_TEMP_DIR
         msg = f"Temp folder for this file will be inside: \"{temp_base_for_this_file}\" (COPY_LOCALLY=True)"
-    _emit_or_print(msg, output_signal, fallback_color_code="green")
+    emit_or_print(msg, output_signal, fallback_color_code="green")
 
     if not os.path.exists(temp_base_for_this_file):
         try:
             os.makedirs(temp_base_for_this_file)
-            _emit_or_print(
+            emit_or_print(
                 f"Created base for temp storage: \"{temp_base_for_this_file}\"", output_signal, fallback_color_code="green")
         except OSError as e:
-            _emit_or_print(
+            emit_or_print(
                 f"ERROR: Failed to create base temporary directory {temp_base_for_this_file}: {e}", error_signal, is_error=True)
             return None
     try:
         temp_dir = tempfile.mkdtemp(
             prefix=temp_dir_prefix, suffix=temp_dir_suffix, dir=temp_base_for_this_file)
-        _emit_or_print(
+        emit_or_print(
             f"Created actual temp folder: \"{temp_dir}\"", output_signal, fallback_color_code="green")
         return temp_dir
     except Exception as e:
-        _emit_or_print(
+        emit_or_print(
             f"ERROR: Failed to create temp directory in {temp_base_for_this_file}: {e}", error_signal, is_error=True)
         return None
 
 
 def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal=None, allow_overwrite=False):
-    _emit_or_print(f">> Moving files matching \"{pattern}\" from \"{src_dir}\" to \"{dest_dir_base}\" (Overwrite: {allow_overwrite})",
+    emit_or_print(f">> Moving files matching \"{pattern}\" from \"{src_dir}\" to \"{dest_dir_base}\" (Overwrite: {allow_overwrite})",
                    output_signal, fallback_color_code="green")
     moved_any_successfully = False
     try:
@@ -174,13 +311,13 @@ def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal
         files_to_move = [f for f in files_to_move if os.path.isfile(f)]
 
         if not files_to_move:
-            _emit_or_print(f"WARNING: No files found matching pattern \"{pattern}\" in \"{abs_src_dir}\" or its subdirectories.",
+            emit_or_print(f"WARNING: No files found matching pattern \"{pattern}\" in \"{abs_src_dir}\" or its subdirectories.",
                            error_signal, fallback_color_code="yellow")
             return False
 
         if not os.path.exists(dest_dir_base):
             os.makedirs(dest_dir_base)
-            _emit_or_print(
+            emit_or_print(
                 f"Created destination directory: \"{dest_dir_base}\"", output_signal, fallback_color_code="green")
 
         for file_path in files_to_move:
@@ -196,7 +333,7 @@ def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal
 
                 if os.path.exists(current_dest_file_path):
                     if allow_overwrite:
-                        _emit_or_print(f"WARNING: Destination \"{current_dest_file_path}\" exists. Overwriting.",
+                        emit_or_print(f"WARNING: Destination \"{current_dest_file_path}\" exists. Overwriting.",
                                        error_signal, fallback_color_code="yellow")
                         try:
                             if os.path.isdir(current_dest_file_path):
@@ -204,7 +341,7 @@ def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal
                             else:
                                 os.remove(current_dest_file_path)
                         except OSError as e_rm:
-                            _emit_or_print(f"ERROR: Failed to remove existing destination {current_dest_file_path} for overwrite: {e_rm}. Skipping.",
+                            emit_or_print(f"ERROR: Failed to remove existing destination {current_dest_file_path} for overwrite: {e_rm}. Skipping.",
                                            error_signal, is_error=True)
                             continue
                     else:
@@ -217,25 +354,25 @@ def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal
                                 dest_file_subdir, new_filename)
                             if not os.path.exists(potential_new_dest_path):
                                 current_dest_file_path = potential_new_dest_path
-                                _emit_or_print(
+                                emit_or_print(
                                     f"INFO: Renaming output to: \"{current_dest_file_path}\"", output_signal, fallback_color_code="cyan")
                                 break
                             count += 1
                             if count > 999:
-                                _emit_or_print(f"ERROR: Could not find an available sequentially numbered name for \"{initial_dest_file_path}\" after 999 attempts. Skipping.",
+                                emit_or_print(f"ERROR: Could not find an available sequentially numbered name for \"{initial_dest_file_path}\" after 999 attempts. Skipping.",
                                                error_signal, is_error=True)
                                 continue
 
                 shutil.move(file_path, current_dest_file_path)
-                _emit_or_print(f"Moved \"{os.path.basename(file_path)}\" to \"{current_dest_file_path}\"",
+                emit_or_print(f"Moved \"{os.path.basename(file_path)}\" to \"{current_dest_file_path}\"",
                                output_signal, fallback_color_code="green")
                 moved_any_successfully = True
             except Exception as e_move:
-                _emit_or_print(f"ERROR: Failed to move \"{os.path.basename(file_path)}\" to \"{current_dest_file_path}\": {e_move}",
+                emit_or_print(f"ERROR: Failed to move \"{os.path.basename(file_path)}\" to \"{current_dest_file_path}\": {e_move}",
                                error_signal, is_error=True)
         return moved_any_successfully
     except Exception as e_prep:
-        _emit_or_print(
+        emit_or_print(
             f"ERROR: Preparing to move files: {e_prep}", error_signal, is_error=True)
         return False
 
@@ -246,21 +383,21 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
         while retries > 0:
             try:
                 shutil.rmtree(temp_path)
-                _emit_or_print(
+                emit_or_print(
                     f"Removed temporary directory: \"{temp_path}\"", output_signal)
                 break
             except OSError as e:
                 retries -= 1
                 err_msg = f"Failed to remove temp directory {temp_path}: {e}"
                 if retries == 0:
-                    _emit_or_print(
+                    emit_or_print(
                         f"ERROR: {err_msg} after multiple attempts.", error_signal, is_error=True)
                 else:
-                    _emit_or_print(
+                    emit_or_print(
                         f"WARNING: {err_msg}, retrying...", error_signal, fallback_color_code="yellow")
                     time.sleep(0.5)
             except Exception as e_unexpected_rm:
-                _emit_or_print(
+                emit_or_print(
                     f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
                 break
 
@@ -275,7 +412,7 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                 if os.path.exists(bin_file) and bin_file.lower().startswith(base_name.lower()) and bin_file.lower().endswith(".bin"):
                     if bin_file not in files_to_delete:
                         files_to_delete.append(bin_file)
-                        _emit_or_print(
+                        emit_or_print(
                             f">> Found associated file for deletion: \"{os.path.basename(bin_file)}\"", output_signal, fallback_color_code="green")
 
 
@@ -332,7 +469,7 @@ def check_tools_exist(tools_list: list[str]) -> bool:
 
 
 def extract_archive(archive_path, output_dir, output_signal=None, error_signal=None):
-    _emit_or_print(f">> Extracting: \"{os.path.basename(archive_path)}\" to \"{output_dir}\"",
+    emit_or_print(f">> Extracting: \"{os.path.basename(archive_path)}\" to \"{output_dir}\"",
                    output_signal, fallback_color_code="green")
     command = [config.TOOL_7ZA, 'x', archive_path, f'-o{output_dir}', '-y']
     return run_command(command, output_signal=output_signal, error_signal=error_signal)
@@ -350,7 +487,7 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
         try:
             os.makedirs(final_output_destination_base)
         except OSError as e:
-            _emit_or_print(
+            emit_or_print(
                 f"ERROR: Failed to create final output dir {final_output_destination_base}: {e}.", error_signal, is_error=True)
             return False
 
@@ -363,7 +500,7 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
 
     path_to_process_in_temp = file_path
     if config.settings.COPY_LOCALLY:
-        _emit_or_print(f">> Copying \"{file_name_base_with_ext}\" to \"{temp_path_for_this_file}\"",
+        emit_or_print(f">> Copying \"{file_name_base_with_ext}\" to \"{temp_path_for_this_file}\"",
                        output_signal, fallback_color_code="green")
         try:
             target_copy_path = os.path.join(
@@ -391,27 +528,27 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
                     temp_path_for_this_file, dep_filename)
                 try:
                     if not os.path.exists(dep_path):
-                        _emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.",
+                        emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.",
                                        error_signal, fallback_color_code="yellow")
                         continue  # Skip to next dependency
 
-                    _emit_or_print(f">> Copying dependent file \"{dep_filename}\" to \"{temp_dep_dest_path}\"",
+                    emit_or_print(f">> Copying dependent file \"{dep_filename}\" to \"{temp_dep_dest_path}\"",
                                    output_signal, fallback_color_code="green")
                     shutil.copy2(dep_path, temp_dep_dest_path)
                 except Exception as dep_e:
-                    _emit_or_print(f"ERROR: Failed to copy dependent file \"{dep_filename}\" to temp: {dep_e}",
+                    emit_or_print(f"ERROR: Failed to copy dependent file \"{dep_filename}\" to temp: {dep_e}",
                                    error_signal, is_error=True)
                     # Decide if this error should halt the entire process.
                     # For now, we log and continue, the main conversion might fail later.
 
         except Exception as e:
-            _emit_or_print(
+            emit_or_print(
                 f"ERROR: Failed to copy \"{file_name_base_with_ext}\" or its dependencies to temp: {e}", error_signal, is_error=True)
             cleanup(temp_path_for_this_file,
                     output_signal=output_signal, error_signal=error_signal)
             return False
     else:
-        _emit_or_print(f">> Processing \"{file_name_base_with_ext}\" with outputs to temp. (COPY_LOCALLY=False)",  # This check should use config.settings.COPY_LOCALLY implicitly by falling into else
+        emit_or_print(f">> Processing \"{file_name_base_with_ext}\" with outputs to temp. (COPY_LOCALLY=False)",  # This check should use config.settings.COPY_LOCALLY implicitly by falling into else
                        output_signal, fallback_color_code="green")
 
     if stage_reporter:
@@ -460,38 +597,38 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
             found_primary_in_temp = []
             if os.path.isfile(expected_primary_output_full_path):
                 found_primary_in_temp.append(expected_primary_output_full_path)
-                _emit_or_print(
+                emit_or_print(
                     f"DEBUG_UTIL: Successfully located expected primary output: {expected_primary_output_full_path}", output_signal)
             else:
-                _emit_or_print(
+                emit_or_print(
                     f"DEBUG_UTIL: Direct check os.path.isfile failed for: {expected_primary_output_full_path}", error_signal, is_error=True)
                 all_files_in_temp_root = glob.glob(
                     os.path.join(temp_path_for_this_file, "*"))
-                _emit_or_print(
+                emit_or_print(
                     f"DEBUG_UTIL: Contents of temp root '{temp_path_for_this_file}': {all_files_in_temp_root}", output_signal)
 
                 original_glob_results = glob.glob(os.path.join(
                     temp_path_for_this_file, '**', f"*.{effective_format_out}"), recursive=True)
-                _emit_or_print(
+                emit_or_print(
                     f"DEBUG_UTIL: Original glob '**/ *.{effective_format_out}' found: {original_glob_results}", output_signal)
 
             if not found_primary_in_temp:
                 err_msg_missing = f"ERROR: Expected primary output ('{expected_primary_output_filename}') not found in temp dir '{temp_path_for_this_file}' for input \"{file_name_base_with_ext}\"."
-                _emit_or_print(err_msg_missing, error_signal, is_error=True)
+                emit_or_print(err_msg_missing, error_signal, is_error=True)
                 primary_move_ok = False
             else:
                 if move_files(temp_path_for_this_file, final_output_destination_base, expected_primary_output_filename,
                               output_signal, error_signal, allow_overwrite):
                     primary_move_ok = True
                 else:
-                    _emit_or_print(f"ERROR: Primary output ('{expected_primary_output_filename}') for \"{file_name_base_with_ext}\" was not moved.",
+                    emit_or_print(f"ERROR: Primary output ('{expected_primary_output_filename}') for \"{file_name_base_with_ext}\" was not moved.",
                                    error_signal, is_error=True)
                     primary_move_ok = False
 
             if primary_move_ok and format_out2:
                 if not move_files(temp_path_for_this_file, final_output_destination_base, f"*.{format_out2}",
                                   output_signal, error_signal, allow_overwrite):
-                    _emit_or_print(f"WARNING: Secondary output (*.{format_out2}) move failed or files skipped for \"{file_name_base_with_ext}\".",
+                    emit_or_print(f"WARNING: Secondary output (*.{format_out2}) move failed or files skipped for \"{file_name_base_with_ext}\".",
                                    error_signal, fallback_color_code="yellow")
 
             if effective_format_out == 'gdi' and primary_move_ok:
@@ -519,12 +656,12 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
                                 else:
                                     os.remove(d_item)
                             else:
-                                _emit_or_print(
+                                emit_or_print(
                                     f"Skipping existing item in destination: {d_item}", error_signal, fallback_color_code="yellow")
                                 continue
                         shutil.move(s_item, d_item)
                     except Exception as e_move_item:
-                        _emit_or_print(
+                        emit_or_print(
                             f"ERROR moving extracted item {item_name}: {e_move_item}", error_signal, is_error=True)
                         all_moved_ok = False
                 primary_move_ok = all_moved_ok
@@ -552,7 +689,7 @@ def process_input(input_path, conversion_func, formats_in, format_out, format_ou
 
 
 def print_help(formats_in, format_out, format_out2=None):
-    _emit_or_print(
+    emit_or_print(
         "CLI Help Text Placeholder - Retain your original help text here.", fallback_color_code="cyan")
     pass
 
@@ -675,115 +812,14 @@ def set_folder_hidden_attribute(folder_path: str):
             f"Exception while trying to set hidden attribute on '{folder_path}': {e}", file=sys.stderr)
         return False
 
-
-def _get_cue_dependencies(cue_file_path):
-    """
-    Parses a .cue file and returns a list of absolute paths to dependent files.
-    """
-    dependencies = []
-    cue_dir = os.path.dirname(cue_file_path)
-
-    try:
-        with open(cue_file_path, 'r', encoding='utf-8', errors='replace') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("FILE"):
-                    # Try to extract filename using regex, handling quotes
-                    match = re.search(r'FILE\s+"?([^"]+)"?\s+\w+', line)
-                    if match:
-                        filename = match.group(1)
-                        # Construct absolute path
-                        abs_path = os.path.join(cue_dir, filename)
-                        dependencies.append(os.path.normpath(abs_path))
-                    else:
-                        # Fallback for lines that might not have quotes but are valid
-                        parts = line.split(maxsplit=2)
-                        if len(parts) > 1:
-                            # Remove potential surrounding quotes manually if regex failed
-                            filename = parts[1].strip('"')
-                            abs_path = os.path.join(cue_dir, filename)
-                            dependencies.append(os.path.normpath(abs_path))
-                        else:
-                            _emit_or_print(
-                                f"Could not parse FILE line in CUE: {line}", is_error=True)
-
-    except FileNotFoundError:
-        _emit_or_print(
-            f"ERROR: CUE file not found: {cue_file_path}", is_error=True)
-        return []
-    except IOError as e:
-        _emit_or_print(
-            f"ERROR: Could not read CUE file: {cue_file_path} - {e}", is_error=True)
-        return []
-    except Exception as e:
-        _emit_or_print(
-            f"ERROR: Unexpected error processing CUE file: {cue_file_path} - {e}", is_error=True)
-        return []
-
-    return dependencies
-
-
-def _get_gdi_dependencies(gdi_file_path):
-    """
-    Parses a .gdi file and returns a list of absolute paths to dependent track files.
-    """
-    dependencies = []
-    gdi_dir = os.path.dirname(gdi_file_path)
-
-    try:
-        with open(gdi_file_path, 'r', encoding='utf-8', errors='replace') as f:
-            # The first line usually contains the number of tracks, which we can skip or parse if needed.
-            # For now, we'll just iterate through all lines.
-            for line_content in f:
-                line = line_content.strip()
-
-                # Regex to capture essential parts, focusing on robust filename extraction.
-                # Groups: 1=track_num_str, 3=filename_quoted_content, 4=filename_unquoted
-                match = re.match(
-                    r'^\s*(\d+)\s+\S+\s+\S+\s+\S+\s+("([^"]+)"|([^\s"]+))(?:\s+.*)?$', line)
-
-                if match:
-                    # track_num_str = match.group(1) # We don't strictly need the track number itself
-                    quoted_filename_content = match.group(3)
-                    unquoted_filename = match.group(4)
-
-                    filename = ""
-                    if quoted_filename_content is not None:
-                        filename = quoted_filename_content
-                    elif unquoted_filename is not None:
-                        filename = unquoted_filename
-                    else:
-                        # This case should ideally not be reached if regex matches and is well-formed.
-                        # Assuming no signal available here
-                        _emit_or_print(
-                            f"Could not parse filename from GDI line: {line}", signal=None, is_error=True)
-                        continue
-
-                    # The regex groups already handle stripping the quotes.
-                    # Clean any potential leading/trailing whitespace from the extracted filename.
-                    filename = filename.strip()
-
-                    if not filename:  # Skip if filename ended up empty after strip
-                        _emit_or_print(
-                            f"Empty filename parsed from GDI line: {line}", signal=None, is_error=True)
-                        continue
-
-                    abs_path = os.path.join(gdi_dir, filename)
-                    dependencies.append(os.path.normpath(abs_path))
-                # Silently ignore lines that don't match the expected GDI track format
-                # (e.g., the first line with track count, comments, or malformed lines)
-
-    except FileNotFoundError:
-        _emit_or_print(
-            f"ERROR: GDI file not found: {gdi_file_path}", signal=None, is_error=True)
-        return []
-    except IOError as e:
-        _emit_or_print(
-            f"ERROR: Could not read GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
-        return []
-    except Exception as e:
-        _emit_or_print(
-            f"ERROR: Unexpected error processing GDI file: {gdi_file_path} - {e}", signal=None, is_error=True)
-        return []
-
-    return dependencies
+if __name__ == "__main__":
+    # Test out different color prints
+    emit_or_print("##  --INITIATING COLOR TEST--  ##")
+    emit_or_print("DEBUG: TEST DEBUG", type="DEBUG")
+    emit_or_print("INFO: TEST DEBUG", type="INFO")
+    emit_or_print("SUCCESS: TEST DEBUG", type="SUCCESS")
+    emit_or_print("WARN: TEST DEBUG", type="WARN")
+    emit_or_print("ERROR: TEST DEBUG", type="ERROR")
+    emit_or_print("ERROR: TEST DEBUG", is_error=True)
+    emit_or_print("No type")
+    emit_or_print("##  --ENDING COLOR TEST--  ##")

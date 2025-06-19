@@ -1327,14 +1327,10 @@ def run_gui():
         app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(True)
 
-    # --- Application Icon Setting ---
-    # The __file__ variable gives the path to the current script (gui_main_window.py)
-    # os.path.dirname(__file__) gives the directory of this script (converter_tools)
-    # Then we join "assets", "qt" and "app_icon.png" to get the full path to the icon.
     icon_path = os.path.join(os.path.dirname(
-        __file__), "assets", "qt", "app_icon.ico")
+        __file__), "assets", "icons", "app_icon.ico")
     if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))  # Set the application-wide icon
+        app.setWindowIcon(QIcon(icon_path))
         print(f"DEBUG: Application icon set from {icon_path}")
     else:
         print(

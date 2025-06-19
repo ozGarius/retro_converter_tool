@@ -31,7 +31,7 @@ def get_user_choice(prompt, options, allow_exit=True, show_numbers=True):
 
         choice_str = input("Enter your choice: ").strip()
         if not choice_str.isdigit():
-            utils._emit_or_print("Invalid input. Please enter a number.", is_error=True)
+            utils.emit_or_print("Invalid input. Please enter a number.", is_error=True)
             continue
 
         choice = int(choice_str)
@@ -44,7 +44,7 @@ def get_user_choice(prompt, options, allow_exit=True, show_numbers=True):
         if 0 <= actual_choice_index < len(options):
             return options[actual_choice_index]  # Return the chosen option string or object
         else:
-            utils._emit_or_print("Invalid choice number. Please try again.", is_error=True)
+            utils.emit_or_print("Invalid choice number. Please try again.", is_error=True)
 
 
 def get_yes_no_input(prompt, default_yes=True):
@@ -58,7 +58,7 @@ def get_yes_no_input(prompt, default_yes=True):
             return True
         if choice in ['n', 'no']:
             return False
-        utils._emit_or_print("Invalid input. Please enter 'y' or 'n'.", is_error=True)
+        utils.emit_or_print("Invalid input. Please enter 'y' or 'n'.", is_error=True)
 
 
 def run_cli(input_path_from_args=None):
@@ -66,14 +66,14 @@ def run_cli(input_path_from_args=None):
 
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
-        utils._emit_or_print("=================================================", fallback_color_code="\033[96m")
-        utils._emit_or_print(">> Converter Tool - Command Line Interface     <<", fallback_color_code="\033[96m")
-        utils._emit_or_print("=================================================", fallback_color_code="\033[96m")
+        utils.emit_or_print("=================================================", fallback_color_code="\033[96m")
+        utils.emit_or_print(">> Converter Tool - Command Line Interface     <<", fallback_color_code="\033[96m")
+        utils.emit_or_print("=================================================", fallback_color_code="\033[96m")
 
         # 1. Choose Job Type
         job_names = [job["job_name"] for job in menu_definitions.JOB_DEFINITIONS]
         if not job_names:
-            utils._emit_or_print("ERROR: No jobs defined in menu_definitions.py. Exiting.", is_error=True)
+            utils.emit_or_print("ERROR: No jobs defined in menu_definitions.py. Exiting.", is_error=True)
             return
 
         selected_job_name = get_user_choice("\nSelect a Job Type:", job_names)
@@ -82,13 +82,13 @@ def run_cli(input_path_from_args=None):
 
         selected_job_details = next((job for job in menu_definitions.JOB_DEFINITIONS if job["job_name"] == selected_job_name), None)
         if not selected_job_details:  # Should not happen if get_user_choice works
-            utils._emit_or_print("Internal error: Selected job not found.", is_error=True)
+            utils.emit_or_print("Internal error: Selected job not found.", is_error=True)
             continue
 
         # 2. Choose Media Type
         media_type_names = [media["media_name"] for media in selected_job_details.get("media_types", [])]
         if not media_type_names:
-            utils._emit_or_print(f"No media types defined for job '{selected_job_name}'. Please check menu_definitions.py.", is_error=True)
+            utils.emit_or_print(f"No media types defined for job '{selected_job_name}'. Please check menu_definitions.py.", is_error=True)
             input("Press Enter to continue...")
             continue
 
@@ -98,20 +98,20 @@ def run_cli(input_path_from_args=None):
 
         selected_media_type_details = next((media for media in selected_job_details.get("media_types", []) if media["media_name"] == selected_media_name), None)
         if not selected_media_type_details:
-            utils._emit_or_print("Internal error: Selected media type not found.", is_error=True)
+            utils.emit_or_print("Internal error: Selected media type not found.", is_error=True)
             continue
 
-        utils._emit_or_print(f"\n--- Job: {selected_job_name} | Media: {selected_media_name} ---", fallback_color_code="\033[93m")
+        utils.emit_or_print(f"\n--- Job: {selected_job_name} | Media: {selected_media_name} ---", fallback_color_code="\033[93m")
 
         # 3. Get Input Path
         input_ext_display = ", ".join([f".{ext}" for ext in selected_media_type_details.get("input_ext", ["*"])])
         while True:
             input_path = input(f"Enter path to input file/folder (expects {input_ext_display}): ").strip().strip('"')
             if not input_path:
-                utils._emit_or_print("Input path cannot be empty.", is_error=True)
+                utils.emit_or_print("Input path cannot be empty.", is_error=True)
                 continue
             if not os.path.exists(input_path):
-                utils._emit_or_print(f"ERROR: Path not found: \"{input_path}\"", is_error=True)
+                utils.emit_or_print(f"ERROR: Path not found: \"{input_path}\"", is_error=True)
                 retry_path = get_yes_no_input("Try again?", default_yes=True)
                 if not retry_path:
                     input_path = None  # Signal to go back
@@ -122,7 +122,7 @@ def run_cli(input_path_from_args=None):
             if os.path.isfile(input_path):
                 file_ext = os.path.splitext(input_path)[1].lower().lstrip('.')
                 if file_ext not in selected_media_type_details.get("input_ext", []):
-                    utils._emit_or_print(f"Warning: File extension '.{file_ext}' does not match expected types ({input_ext_display}).", fallback_color_code="\033[93m")
+                    utils.emit_or_print(f"Warning: File extension '.{file_ext}' does not match expected types ({input_ext_display}).", fallback_color_code="\033[93m")
                     confirm_proceed = get_yes_no_input("Proceed anyway?", default_yes=False)
                     if not confirm_proceed:
                         continue  # Retry input path
@@ -156,10 +156,10 @@ def run_cli(input_path_from_args=None):
                 elif isinstance(possible_secondary_outputs, str) and idx == 0:  # If secondary is string, applies to first primary
                     target_format_out2 = possible_secondary_outputs
 
-        utils._emit_or_print(f"Selected output format: .{target_format_out if target_format_out else 'Folder'}" + (f" (+ .{target_format_out2})" if target_format_out2 else ""), fallback_color_code="\033[92m")
+        utils.emit_or_print(f"Selected output format: .{target_format_out if target_format_out else 'Folder'}" + (f" (+ .{target_format_out2})" if target_format_out2 else ""), fallback_color_code="\033[92m")
 
         # 5. Processing Options
-        utils._emit_or_print("\n--- Processing Options ---", fallback_color_code="\033[93m")
+        utils.emit_or_print("\n--- Processing Options ---", fallback_color_code="\033[93m")
         # Changed default_yes for allow_overwrite_cli as OVERWRITE_EXISTING is not a defined setting.
         allow_overwrite_cli = get_yes_no_input("Overwrite existing output files?", default_yes=False)
         delete_input_cli = get_yes_no_input("Delete input files after successful job?", default_yes=config.settings.DELETE_SOURCE_ON_SUCCESS)
@@ -182,11 +182,11 @@ def run_cli(input_path_from_args=None):
                 while True:
                     output_folder_path = input("Enter custom output folder path: ").strip().strip('"')
                     if not output_folder_path:
-                        utils._emit_or_print("Output folder path cannot be empty.", is_error=True)
+                        utils.emit_or_print("Output folder path cannot be empty.", is_error=True)
                         continue
                     # Basic check, can be made more robust (e.g., check writability)
                     if not os.path.isdir(os.path.dirname(os.path.abspath(output_folder_path))):  # Check if parent exists
-                        utils._emit_or_print(f"Parent directory for '{output_folder_path}' does not seem valid.", is_error=True)
+                        utils.emit_or_print(f"Parent directory for '{output_folder_path}' does not seem valid.", is_error=True)
                         if not get_yes_no_input("Continue with this path?", default_yes=False):
                             continue
                     explicit_output_dir = os.path.normpath(output_folder_path)
@@ -197,9 +197,9 @@ def run_cli(input_path_from_args=None):
         conversion_func = getattr(conversions, conversion_func_name, None)
 
         if not callable(conversion_func):
-            utils._emit_or_print(f"ERROR: Conversion function '{conversion_func_name}' not found or not callable.", is_error=True)
+            utils.emit_or_print(f"ERROR: Conversion function '{conversion_func_name}' not found or not callable.", is_error=True)
         else:
-            utils._emit_or_print(f"\nStarting job: {selected_job_name} - {selected_media_name} for '{os.path.basename(input_path)}'...", fallback_color_code="\033[96m")
+            utils.emit_or_print(f"\nStarting job: {selected_job_name} - {selected_media_name} for '{os.path.basename(input_path)}'...", fallback_color_code="\033[96m")
             # Call utils.process_file directly
             # Note: utils.process_file uses config.DELETE_SOURCE_ON_SUCCESS and config.COPY_LOCALLY internally.
             # We pass allow_overwrite directly.
@@ -220,7 +220,7 @@ def run_cli(input_path_from_args=None):
 
         input("\nPress Enter to return to the main menu...")
 
-    utils._emit_or_print("\nExiting converter CLI.", fallback_color_code="\033[96m")
+    utils.emit_or_print("\nExiting converter CLI.", fallback_color_code="\033[96m")
 
 
 if __name__ == '__main__':
