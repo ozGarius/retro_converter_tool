@@ -87,7 +87,7 @@ class ConverterWindow(QMainWindow):
             return
 
         self.ui.setAttribute(Qt.WA_DeleteOnClose, True)
-        self.ui.setAcceptDrops(True)  # Enable drag and drop for the main window
+        self.setAcceptDrops(True)  # Enable drag and drop for the main window
 
         # --- Find UI Elements ---
         self.job_type_combo = self.ui.findChild(QComboBox, "job_type_combo")
@@ -1241,17 +1241,21 @@ class ConverterWindow(QMainWindow):
 
     def dragEnterEvent(self, event):
         """Handles drag enter events to accept only file/folder drops."""
+        print("DEBUG: dragEnterEvent triggered")
         if event.mimeData().hasUrls():
+            print("DEBUG: dragEnterEvent: Accepting - URLs found")
             event.acceptProposedAction()
             if self.statusbar:
-                self.statusbar.showMessage("Drop files or folders here...")
+                self.statusbar.showMessage("Drop files or folders here...", 2000)
         else:
+            print("DEBUG: dragEnterEvent: Ignoring - No URLs")
             event.ignore()
             if self.statusbar:
-                self.statusbar.showMessage("Drag ignored: Only files/folders are accepted.")
+                self.statusbar.showMessage("Drag ignored: No URLs found.", 2000)
 
     def dropEvent(self, event):
         """Handles drop events to process dropped files/folders."""
+        print("DEBUG: dropEvent triggered")
         paths = []
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
@@ -1259,17 +1263,15 @@ class ConverterWindow(QMainWindow):
                     paths.append(url.toLocalFile())
 
         if paths:
+            print(f"DEBUG: dropEvent: Processing {len(paths)} paths")
             self.process_added_paths(paths)
             event.acceptProposedAction()
-            if self.statusbar:
-                # process_added_paths already updates statusbar, so this might be redundant
-                # or could be more general like "Items dropped."
-                # For now, let's rely on process_added_paths's message.
-                pass # self.statusbar.showMessage(f"{len(paths)} item(s) dropped and processed.")
+            # Statusbar message is handled by process_added_paths
         else:
+            print("DEBUG: dropEvent: No local files to process")
             event.ignore()
             if self.statusbar:
-                self.statusbar.showMessage("Drop ignored: No valid local files or folders found.")
+                self.statusbar.showMessage("Drop ignored: No valid local files or folders found.", 2000)
 
 
 def run_gui():
