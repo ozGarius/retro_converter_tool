@@ -17,8 +17,8 @@ try:
         QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar
     )
     from PySide6.QtGui import (QAction, QKeySequence, QColor, QPalette,
-                               QCloseEvent, QIcon, QDropEvent, QMimeData)
-    from PySide6.QtCore import Qt, Slot, Signal, QPoint # QMimeData is also in QtCore
+                               QCloseEvent, QIcon, QDropEvent)
+    from PySide6.QtCore import Qt, Slot, Signal, QPoint, QMimeData
     from PySide6.QtUiTools import QUiLoader
 except ImportError as e:
     try:
