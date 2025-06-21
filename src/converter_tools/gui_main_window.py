@@ -29,8 +29,7 @@ except ImportError as e:
         QMessageBox.critical(
             None, "Fatal Error", f"PySide6 is not installed or found for gui_main_window.py: {e}")
     except Exception:
-        print(
-            f"FATAL ERROR (gui_main_window.py): PySide6 not found, and QMessageBox fallback failed. {e}")
+        print(f"FATAL ERROR (gui_main_window.py): PySide6 not found, and QMessageBox fallback failed. {e}")
     sys.exit(1)
 
 # Core application modules
@@ -45,227 +44,234 @@ from src.converter_tools.gui_settings import SettingsDialog
 from src.converter_tools.gui_worker import ConversionWorker, N_STAGES_PER_FILE
 from src.converter_tools.gui_m3u_creator import M3UCreatorWindow
 
-# Constants for table columns
+# Constants
 COL_CHECK = 0
 COL_PATH = 1
 COL_TYPE = 2
 TABLE_HEADINGS = ['✓', 'File Path', 'Type']
 
+APP_NAME = "Retro Converter Tool"
+APP_VERSION = "1.1.0"
+APP_COPYRIGHT = "(c) 2023-2024 ozGarius"
+GITHUB_URL = "https://github.com/ozGarius/retro_converter_tool"
+
+# UI file paths
+MAIN_UI_PATH = os.path.join(os.path.dirname(__file__), "assets", "qt", "main_window.ui")
+ICON_PATH = os.path.join(os.path.dirname(__file__), "assets", "icons", "app_icon.ico")
+
+# Thread timeouts
+THREAD_STOP_TIMEOUT = 3000  # milliseconds
+QUIT_THREAD_TIMEOUT = 2000  # milliseconds
+
+# Hardcoded content (avoiding README parsing)
+TOOLS_USED_TEXT = (
+    "- Python 3.x<br>"
+    "- PySide6 (for the GUI)<br>"
+    "- send2trash (for safe deletion)<br>"
+    "- 7-Zip (as 7za.exe, for archive handling)<br>"
+    "- DolphinTool.exe (for Nintendo Wii/GC formats)<br>"
+    "- chdman.exe (for MAME CHDs)<br>"
+    "- maxcso.exe (for CSO compression)"
+)
+
+LICENSES_TEXT = (
+    "- PySide6: LGPL v3<br>"
+    "- send2trash: BSD License<br>"
+    "- 7-Zip (7za.exe): GNU LGPL + unRAR restriction<br>"
+    "- DolphinTool.exe: GPLv2+<br>"
+    "- chdman.exe: GPL-2.0+ (MAME specifics)<br>"
+    "- maxcso.exe: MIT License"
+)
+
 
 class ConverterWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        
+        # Initialize application
+        self._setup_application()
+        
+        # Load UI
+        self._load_main_ui()
+        
+        # Find and validate UI elements
+        self._find_ui_elements()
+        
+        # Setup drag and drop
+        self._setup_drag_drop()
+        
+        # Initialize UI states
+        self._initialize_ui_states()
+        
+        # Connect signals
+        self._connect_signals()
+        
+        # Initialize member variables
+        self._initialize_variables()
+        
+        # Final setup
+        self._finalize_initialization()
 
+    def _setup_application(self):
+        """Initialize QApplication and set up basic application properties."""
         app_instance = QApplication.instance()
         if not app_instance:
-            print(
-                "Warning: QApplication instance not found during ConverterWindow init. Creating one.")
+            print("Warning: QApplication instance not found during ConverterWindow init. Creating one.")
             app_instance = QApplication(sys.argv)
 
         if app_instance:
             app_instance.setQuitOnLastWindowClosed(True)
             app_instance.aboutToQuit.connect(self._on_about_to_quit)
 
-        main_ui_file_path = os.path.join(os.path.dirname(
-            __file__), "assets", "qt", "main_window.ui")
-        if not os.path.exists(main_ui_file_path):
-            QMessageBox.critical(
-                self, "Fatal Error", f"Main UI file not found: {main_ui_file_path}")
-            if app_instance:
-                app_instance.quit()
-            else:
-                sys.exit(-1)
+    def _load_main_ui(self):
+        """Load the main UI file."""
+        if not os.path.exists(MAIN_UI_PATH):
+            self._show_fatal_error(f"Main UI file not found: {MAIN_UI_PATH}")
             return
 
         loader = QUiLoader()
-        self.ui = loader.load(main_ui_file_path, self)
+        self.ui = loader.load(MAIN_UI_PATH, self)
         if not self.ui:
-            QMessageBox.critical(self, "Fatal UI Load Error",
-                                 f"Could not load main_window.ui: {loader.errorString()}")
-            if app_instance:
-                app_instance.quit()
-            else:
-                sys.exit(-1)
+            self._show_fatal_error(f"Could not load main_window.ui: {loader.errorString()}")
             return
 
         self.ui.setAttribute(Qt.WA_DeleteOnClose, True)
 
-        # --- Find UI Elements ---
-        self.job_type_combo = self.ui.findChild(QComboBox, "job_type_combo")
-        self.media_type_combo = self.ui.findChild(
-            QComboBox, "media_type_combo")
-        self.add_files_button = self.ui.findChild(
-            QPushButton, "add_files_button")
-        self.add_folder_button = self.ui.findChild(
-            QPushButton, "add_folder_button")
-        self.recursive_checkbox = self.ui.findChild(
-            QCheckBox, "recursive_checkbox")
-        self.input_file_types_label = self.ui.findChild(
-            QLabel, "input_file_types_label")
-        self.select_input_types_button = self.ui.findChild(
-            QPushButton, "select_input_types_button")
-        self.file_table = self.ui.findChild(QTableWidget, "file_table")
+    def _find_ui_elements(self):
+        """Find all UI elements and validate critical ones."""
+        # Widget mapping for cleaner code
+        widget_mappings = [
+            ('job_type_combo', QComboBox),
+            ('media_type_combo', QComboBox),
+            ('add_files_button', QPushButton),
+            ('add_folder_button', QPushButton),
+            ('recursive_checkbox', QCheckBox),
+            ('input_file_types_label', QLabel),
+            ('select_input_types_button', QPushButton),
+            ('file_table', QTableWidget),
+            ('output_folder_group_box', QGroupBox),
+            ('select_output_folder_button', QPushButton),
+            ('output_folder_path_display', QLineEdit),
+            ('output_file_types_label', QLabel),
+            ('select_output_type_button', QPushButton),
+            ('overwrite_files_checkbox', QCheckBox),
+            ('delete_input_checkbox', QCheckBox),
+            ('output_same_folder_checkbox', QCheckBox),
+            ('main_action_button', QPushButton),
+            ('toggle_log_button', QPushButton),
+            ('clear_log_button', QPushButton),
+            ('log_output_text', QTextEdit),
+            ('actionSettings', QAction),
+            ('actionExit', QAction),
+            ('progress_group_box', QGroupBox),
+            ('overall_label', QLabel),
+            ('overall_progress_bar', QProgressBar),
+            ('overall_cancel_button', QPushButton),
+            ('file_label', QLabel),
+            ('file_progress_bar', QProgressBar),
+            ('file_cancel_button', QPushButton),
+        ]
 
-        self.output_folder_group_box = self.ui.findChild(
-            QGroupBox, "output_folder_group_box")
-        self.select_output_folder_button = self.ui.findChild(
-            QPushButton, "select_output_folder_button")
-        self.output_folder_path_display = self.ui.findChild(
-            QLineEdit, "output_folder_path_display")
-        self.output_file_types_label = self.ui.findChild(
-            QLabel, "output_file_types_label")
-        self.select_output_type_button = self.ui.findChild(
-            QPushButton, "select_output_type_button")
+        # Find all widgets
+        for attr_name, widget_type in widget_mappings:
+            setattr(self, attr_name, self.ui.findChild(widget_type, attr_name))
 
-        self.overwrite_files_checkbox = self.ui.findChild(
-            QCheckBox, "overwrite_files_checkbox")
-        self.delete_input_checkbox = self.ui.findChild(
-            QCheckBox, "delete_input_checkbox")
-        self.output_same_folder_checkbox = self.ui.findChild(
-            QCheckBox, "output_same_folder_checkbox")
-
-        self.main_action_button = self.ui.findChild(
-            QPushButton, "main_action_button")
-        self.toggle_log_button = self.ui.findChild(
-            QPushButton, "toggle_log_button")
-        self.clear_log_button = self.ui.findChild(
-            QPushButton, "clear_log_button")
-        self.log_output_text = self.ui.findChild(QTextEdit, "log_output_text")
-
-        self.statusbar = self.ui.statusBar() if hasattr(
-            self.ui, 'statusBar') and self.ui.statusBar() else QStatusBar(self.ui)
+        # Setup status bar
+        self.statusbar = self.ui.statusBar() if hasattr(self.ui, 'statusBar') and self.ui.statusBar() else QStatusBar(self.ui)
         if not (hasattr(self.ui, 'statusBar') and self.ui.statusBar()):
             if isinstance(self.ui.layout(), QVBoxLayout):
                 self.ui.layout().addWidget(self.statusbar)
 
-        self.actionSettings = self.ui.findChild(QAction, "actionSettings")
-        self.actionExit = self.ui.findChild(QAction, "actionExit")
-
-        self.progress_group_box = self.ui.findChild(
-            QGroupBox, "progress_group_box")
-        self.overall_label = self.ui.findChild(QLabel, "overall_label")
-        self.overall_progress_bar = self.ui.findChild(
-            QProgressBar, "overall_progress_bar")
-        self.overall_cancel_button = self.ui.findChild(
-            QPushButton, "overall_cancel_button")
-        self.file_label = self.ui.findChild(QLabel, "file_label")
-        self.file_progress_bar = self.ui.findChild(
-            QProgressBar, "file_progress_bar")
-        self.file_cancel_button = self.ui.findChild(
-            QPushButton, "file_cancel_button")
-
-        critical_main_widget_names = [
+        # Validate critical widgets
+        critical_widgets = [
             "job_type_combo", "media_type_combo", "add_files_button", "file_table",
             "output_folder_group_box", "main_action_button", "log_output_text",
-            "actionSettings", "actionExit",
-            "progress_group_box", "overall_label", "overall_progress_bar",
-            "overall_cancel_button", "file_label", "file_progress_bar", "file_cancel_button"
+            "actionSettings", "actionExit", "progress_group_box", "overall_label", 
+            "overall_progress_bar", "overall_cancel_button", "file_label", 
+            "file_progress_bar", "file_cancel_button"
         ]
-        for name in critical_main_widget_names:
-            widget = getattr(self, name, None)
-            if widget is None:
-                QMessageBox.critical(self, "Main UI Element Error",
-                                     f"UI element '{name}' not found in main_window.ui. "
-                                     "Please check objectName in Qt Designer.")
-                if app_instance:
-                    app_instance.quit()
-                else:
-                    sys.exit(-1)
-                return
+        
+        missing_widgets = [name for name in critical_widgets if getattr(self, name, None) is None]
+        if missing_widgets:
+            self._show_fatal_error(f"Critical UI elements not found: {', '.join(missing_widgets)}")
 
-        # Ensure previous attempts are cleared for drag/drop
-        self.setAcceptDrops(False)
-        if hasattr(self.ui, 'setAcceptDrops'): # self.ui is the base QWidget loaded from .ui
-            self.ui.setAcceptDrops(False)
-        central_w = self.centralWidget() # QMainWindow's central widget
-        if central_w and hasattr(central_w, 'setAcceptDrops'):
-            central_w.setAcceptDrops(False)
+    def _setup_drag_drop(self):
+        """Configure drag and drop functionality."""
+        # Disable drag/drop for everything first
+        for widget in [self, self.ui, self.centralWidget()]:
+            if widget and hasattr(widget, 'setAcceptDrops'):
+                widget.setAcceptDrops(False)
 
-        # Now, specifically enable it for file_table and install filter
+        # Enable specifically for file table
         if self.file_table:
-            self.file_table.setAcceptDrops(True) # Make file_table accept drops
-            self.file_table.installEventFilter(self) # Make ConverterWindow handle its events
-        else:
-            # This case should ideally not happen if UI is loaded correctly
-            pass # self.file_table was not found, already logged during widget finding if critical
+            self.file_table.setAcceptDrops(True)
+            self.file_table.installEventFilter(self)
 
-        # --- Initialize UI States ---
+    def _initialize_ui_states(self):
+        """Set initial UI states."""
+        # Progress UI
         if self.progress_group_box:
             self.progress_group_box.setVisible(False)
-        if self.overall_progress_bar:
-            self.overall_progress_bar.setValue(0)
-        if self.file_progress_bar:
-            self.file_progress_bar.setValue(0)
-        if self.overall_label:
-            self.overall_label.setText("Overall Progress:")
-        if self.file_label:
-            self.file_label.setText("Current File:")
+        
+        for progress_bar in [self.overall_progress_bar, self.file_progress_bar]:
+            if progress_bar:
+                progress_bar.setValue(0)
 
+        for label, text in [(self.overall_label, "Overall Progress:"), (self.file_label, "Current File:")]:
+            if label:
+                label.setText(text)
+
+        # File table setup
         if self.file_table:
-            self.file_table.setHorizontalHeaderLabels(TABLE_HEADINGS)
-            header = self.file_table.horizontalHeader()
-            header.setSectionResizeMode(
-                COL_CHECK, QHeaderView.ResizeMode.ResizeToContents)
-            header.setSectionResizeMode(
-                COL_PATH, QHeaderView.ResizeMode.Stretch)
-            header.setSectionResizeMode(
-                COL_TYPE, QHeaderView.ResizeMode.ResizeToContents)
-            header.setStyleSheet(
-                "QHeaderView::section { padding-left: 4px; padding-right: 4px; }")
-            self.file_table.setContextMenuPolicy(
-                Qt.ContextMenuPolicy.CustomContextMenu)
-            self.file_table.customContextMenuRequested.connect(
-                self._show_file_table_context_menu)
-            self.file_table.cellClicked.connect(self.handle_cell_click)
+            self._setup_file_table()
 
-        # --- Connect Signals and Slots ---
-        if self.job_type_combo:
-            self.job_type_combo.currentTextChanged.connect(
-                self._on_job_type_changed)
-        if self.media_type_combo:
-            self.media_type_combo.currentTextChanged.connect(
-                self._on_media_type_changed)
-        if self.add_files_button:
-            self.add_files_button.clicked.connect(self.add_files)
-        if self.add_folder_button:
-            self.add_folder_button.clicked.connect(self.add_folder)
-        if self.select_input_types_button:
-            self.select_input_types_button.clicked.connect(
-                self._on_select_input_types_clicked)
+    def _setup_file_table(self):
+        """Configure the file table."""
+        self.file_table.setHorizontalHeaderLabels(TABLE_HEADINGS)
+        header = self.file_table.horizontalHeader()
+        
+        # Set resize modes
+        resize_modes = [
+            (COL_CHECK, QHeaderView.ResizeMode.ResizeToContents),
+            (COL_PATH, QHeaderView.ResizeMode.Stretch),
+            (COL_TYPE, QHeaderView.ResizeMode.ResizeToContents)
+        ]
+        
+        for col, mode in resize_modes:
+            header.setSectionResizeMode(col, mode)
+        
+        header.setStyleSheet("QHeaderView::section { padding-left: 4px; padding-right: 4px; }")
+        self.file_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.file_table.customContextMenuRequested.connect(self._show_file_table_context_menu)
+        self.file_table.cellClicked.connect(self.handle_cell_click)
 
-        if self.select_output_folder_button:
-            self.select_output_folder_button.clicked.connect(
-                self._on_select_output_folder_clicked)
-        if self.select_output_type_button:
-            self.select_output_type_button.clicked.connect(
-                self._on_select_output_type_clicked)
-        if self.output_same_folder_checkbox:
-            self.output_same_folder_checkbox.toggled.connect(
-                self._on_output_same_folder_toggled)
-        if self.delete_input_checkbox:
-            self.delete_input_checkbox.toggled.connect(
-                self._on_delete_input_toggled)
+    def _connect_signals(self):
+        """Connect all UI signals to their slots."""
+        signal_connections = [
+            (self.job_type_combo, 'currentTextChanged', self._on_job_type_changed),
+            (self.media_type_combo, 'currentTextChanged', self._on_media_type_changed),
+            (self.add_files_button, 'clicked', self.add_files),
+            (self.add_folder_button, 'clicked', self.add_folder),
+            (self.select_input_types_button, 'clicked', self._on_select_input_types_clicked),
+            (self.select_output_folder_button, 'clicked', self._on_select_output_folder_clicked),
+            (self.select_output_type_button, 'clicked', self._on_select_output_type_clicked),
+            (self.output_same_folder_checkbox, 'toggled', self._on_output_same_folder_toggled),
+            (self.delete_input_checkbox, 'toggled', self._on_delete_input_toggled),
+            (self.main_action_button, 'clicked', self.start_conversion),
+            (self.toggle_log_button, 'toggled', self.toggle_log_visibility),
+            (self.clear_log_button, 'clicked', self.clear_log),
+            (self.actionSettings, 'triggered', self.open_settings),
+            (self.actionExit, 'triggered', self.close_application),
+            (self.overall_cancel_button, 'clicked', self._request_conversion_stop),
+            (self.file_cancel_button, 'clicked', self._request_conversion_stop),
+        ]
 
-        if self.main_action_button:
-            self.main_action_button.clicked.connect(self.start_conversion)
-        if self.toggle_log_button:
-            self.toggle_log_button.toggled.connect(self.toggle_log_visibility)
-        if self.clear_log_button:
-            self.clear_log_button.clicked.connect(self.clear_log)
+        for widget, signal_name, slot in signal_connections:
+            if widget:
+                getattr(widget, signal_name).connect(slot)
 
-        if self.actionSettings:
-            self.actionSettings.triggered.connect(self.open_settings)
-        if self.actionExit:
-            self.actionExit.triggered.connect(self.close_application)
-
-        if self.overall_cancel_button:
-            self.overall_cancel_button.clicked.connect(
-                self._request_conversion_stop)
-        if self.file_cancel_button:
-            self.file_cancel_button.clicked.connect(
-                self._request_conversion_stop)
-
-        # --- Initialize Member Variables ---
+    def _initialize_variables(self):
+        """Initialize member variables."""
         self.conversion_thread = None
         self.table_data = []
         self.selected_job_details = None
@@ -273,32 +279,41 @@ class ConverterWindow(QMainWindow):
         self.active_input_filters = set()
         self.selected_output_filter = None
 
-        # --- Initial UI Setup ---
+    def _finalize_initialization(self):
+        """Complete the initialization process."""
         self._populate_job_types()
+        
         if self.delete_input_checkbox:
             self.delete_input_checkbox.setChecked(config.settings.DELETE_SOURCE_ON_SUCCESS)
+        
         if self.output_same_folder_checkbox:
             self._on_output_same_folder_toggled(self.output_same_folder_checkbox.isChecked())
 
         self.update_ui_for_job_selection()
+        
         if self.statusbar:
             self.statusbar.showMessage(
                 f"Ready. Max Concurrent Jobs: {config.settings.CONCURRENT_JOBS}. Select a job type to begin."
             )
 
-        # Initialize menu system
         self._setup_menu_system()
-        self.ui.setWindowTitle("Retro Converter Tool")
+        self.ui.setWindowTitle(APP_NAME)
 
+    def _show_fatal_error(self, message):
+        """Show a fatal error and exit the application."""
+        QMessageBox.critical(self, "Fatal Error", message)
+        app_instance = QApplication.instance()
+        if app_instance:
+            app_instance.quit()
+        else:
+            sys.exit(-1)
 
     def _setup_menu_system(self):
         """Initialize all menus and menu items."""
         menubar = self._get_or_create_menubar()
-
         self._setup_jobs_menu(menubar)
         self._setup_m3u_creator_menu(menubar)
         self._setup_help_menu(menubar)
-
 
     def _get_or_create_menubar(self):
         """Get existing menubar or create a new one."""
@@ -311,7 +326,6 @@ class ConverterWindow(QMainWindow):
                 self.setMenuBar(menubar)
         return menubar
 
-
     def _find_menu_by_title(self, menubar, title):
         """Find an existing menu by its title."""
         for action in menubar.actions():
@@ -320,31 +334,26 @@ class ConverterWindow(QMainWindow):
                 return menu
         return None
 
-
     def _setup_m3u_creator_menu(self, menubar):
         """Set up the M3U Creator menu item."""
         if not (hasattr(self, 'ui') and self.ui and hasattr(self.ui, 'menuBar')):
             self._log_warning("Could not find menuBar on self.ui to add Tools menu for M3U Creator.")
             return
 
-        # Find or create Tools menu
         tools_menu = self._find_menu_by_title(menubar, "&Tools")
         if not tools_menu:
             tools_menu = menubar.addMenu("&Tools")
 
-        # Create M3U Creator action
         self.actionM3UPlaylistCreator = QAction("M3U Playlist Creator...", self.ui)
         self.actionM3UPlaylistCreator.setObjectName("actionM3UPlaylistCreator")
         self.actionM3UPlaylistCreator.triggered.connect(self._open_m3u_creator)
         tools_menu.addAction(self.actionM3UPlaylistCreator)
-
 
     def _setup_jobs_menu(self, menubar):
         """Set up the Jobs menu with concurrent jobs submenu."""
         self.jobs_menu = QMenu("&Jobs", self.ui)
         self.concurrent_job_actions = []
         
-        # Create concurrent jobs submenu
         concurrent_jobs_menu = QMenu("Concurrent Jobs", self.ui)
         max_jobs_options = self._get_max_jobs_range()
         
@@ -364,13 +373,11 @@ class ConverterWindow(QMainWindow):
 
         self.jobs_menu.addMenu(concurrent_jobs_menu)
         
-        # Insert before Help menu if it exists, otherwise append
         help_menu_action = self._find_menu_action_by_title(menubar, "&Help")
         if help_menu_action:
             menubar.insertMenu(help_menu_action, self.jobs_menu)
         else:
             menubar.addMenu(self.jobs_menu)
-
 
     def _setup_help_menu(self, menubar):
         """Set up the Help menu."""
@@ -380,13 +387,11 @@ class ConverterWindow(QMainWindow):
         self.help_menu.addAction(self.actionAbout)
         menubar.addMenu(self.help_menu)
 
-
     def _get_max_jobs_range(self):
         """Get the range of available concurrent job options."""
         cpu_count = os.cpu_count() or 4
-        max_jobs = min(cpu_count + 1, 11)  # Cap at 10 concurrent jobs
+        max_jobs = min(cpu_count + 1, 11)
         return range(1, max_jobs)
-
 
     def _find_menu_action_by_title(self, menubar, title):
         """Find a menu action by its menu title."""
@@ -396,7 +401,6 @@ class ConverterWindow(QMainWindow):
                 return action
         return None
 
-
     def _log_warning(self, message):
         """Log a warning message using available logging mechanism."""
         if hasattr(self, 'log_output_text') and self.log_output_text:
@@ -404,140 +408,88 @@ class ConverterWindow(QMainWindow):
         else:
             print(f"DEBUG: {message}", file=sys.stderr)
 
+    def _emit_or_print(self, message, fallback_color_code="white"):
+        """Emit message to log or print as fallback."""
+        if self.log_output_text:
+            color_map = {"yellow": "orange", "red": "red"}
+            color = color_map.get(fallback_color_code, "white")
+            if color != "white":
+                self.log_output_text.append(f"<font color='{color}'>{message}</font>")
+            else:
+                self.log_output_text.append(message)
+        else:
+            print(message)
+
+    # Dialog methods
     @Slot()
     def _open_m3u_creator(self):
-        # Determine the correct parent: self.ui if it's the main widget from loader, otherwise self (QMainWindow)
-        parent_widget = self.ui if hasattr(
-            self, 'ui') and self.ui is not None else self
+        """Open the M3U Creator dialog."""
+        parent_widget = self.ui if hasattr(self, 'ui') and self.ui is not None else self
         try:
-            # M3UCreatorWindow's __init__ handles its own UI file loading by default
             dialog = M3UCreatorWindow(parent=parent_widget)
-            dialog.exec()  # Show as modal dialog
+            dialog.exec()
         except Exception as e:
             error_message = f"Could not open M3U Playlist Creator: {e}"
-            # Log to main window's log if available
-            if hasattr(self, 'log_output_text') and self.log_output_text:
-                self.log_output_text.append(
-                    f"<font color='red'>ERROR: {error_message}</font>")
-            else:
-                print(f"ERROR: {error_message}", file=sys.stderr)
-            # Also show a QMessageBox to the user
-            # Determine parent for QMessageBox carefully
-            parent_for_msgbox = self.ui if hasattr(
-                self, 'ui') and self.ui is not None and isinstance(self.ui, QWidget) else self
-            # Final fallback if self.ui is not a QWidget
+            self._log_warning(error_message)
+            
+            parent_for_msgbox = self.ui if (hasattr(self, 'ui') and self.ui is not None 
+                                          and isinstance(self.ui, QWidget)) else self
             if not isinstance(parent_for_msgbox, QWidget):
                 parent_for_msgbox = None
-            QMessageBox.critical(
-                parent_for_msgbox, "M3U Creator Error", error_message)
+            QMessageBox.critical(parent_for_msgbox, "M3U Creator Error", error_message)
 
     @Slot()
     def show_about_dialog(self):
-        app_name = "Retro Converter Tool" # Verified
-        version = "1.1.0" # This might need to be dynamic later
-        copyright_text = "(c) 2023-2024 ozGarius" # Corrected copyright name
-
-        # NOTE: The following lines related to README parsing are intentionally removed:
-        # base_path = os.path.dirname(__file__)
-        # project_root = os.path.dirname(os.path.dirname(base_path))
-        # readme_file_path = os.path.join(project_root, "README.md")
-        # readme_file_path = os.path.normpath(readme_file_path)
-        # readme_data = utils.extract_readme_sections(readme_path=readme_file_path)
-        # tools_used_from_readme = readme_data.get("tools_and_libraries", "Could not load from README.md")
-        # licenses_from_readme = readme_data.get("third_party_licenses", "Could not load from README.md")
-
-        # Hardcoded strings for tools/libraries and licenses
-        tools_used_text = (
-            "- Python 3.x<br>"
-            "- PySide6 (for the GUI)<br>"
-            "- send2trash (for safe deletion)<br>"
-            "- 7-Zip (as 7za.exe, for archive handling)<br>"
-            "- DolphinTool.exe (for Nintendo Wii/GC formats)<br>"
-            "- chdman.exe (for MAME CHDs)<br>"
-            "- maxcso.exe (for CSO compression)"
-        )
-
-        licenses_text = (
-            "- PySide6: LGPL v3<br>"
-            "- send2trash: BSD License<br>"
-            "- 7-Zip (7za.exe): GNU LGPL + unRAR restriction<br>"
-            "- DolphinTool.exe: GPLv2+<br>"
-            "- chdman.exe: GPL-2.0+ (MAME specifics)<br>"
-            "- maxcso.exe: MIT License"
-        )
-
-        about_text = (
-            f"<h2>{app_name}</h2>"
-            f"<p><b>Version:</b> {version}</p>"
-            f"<p><b>Copyright:</b> {copyright_text}</p>"
-            f"<p>A tool for converting and managing media files.</p>"
-            f"<hr>"
-            f"<p><b>Python Version:</b><br>{sys.version.split()[0]}</p>"
-            f"<hr>"
-            f"<p><b>Tools and Libraries Used:</b><br>{tools_used_text}</p>"
-            f"<hr>"
-            f"<p><b>Third-Party Licenses:</b><br>{licenses_text}</p>"
-            f"<hr>"
-            f"<p><b>GitHub Repository:</b> <a href='https://github.com/ozGarius/retro_converter_tool'>retro_converter_tool on GitHub</a></p>" # Corrected GitHub URL
-        )
-
-        msg_box = QMessageBox(self.ui if self.ui else self) # Use self.ui as parent
-        msg_box.setWindowTitle(f"About {app_name}")
+        """Show the About dialog."""
+        about_text = self._build_about_text()
+        
+        msg_box = QMessageBox(self.ui if self.ui else self)
+        msg_box.setWindowTitle(f"About {APP_NAME}")
         msg_box.setTextFormat(Qt.TextFormat.RichText)
         msg_box.setText(about_text)
         msg_box.setIcon(QMessageBox.Icon.Information)
         msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
-        # Allow text selection and link interaction
         msg_box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         msg_box.exec()
 
-    @Slot() # Changed signature if using self.sender()
-    def _handle_concurrent_jobs_changed(self):
-        triggered_action = self.sender()
-        if not isinstance(triggered_action, QAction):
-            if utils.APP_LOGGER:
-                utils.APP_LOGGER.warning(f"_handle_concurrent_jobs_changed called by non-QAction sender: {type(triggered_action)}")
-            return
+    def _build_about_text(self):
+        """Build the about dialog text."""
+        return (
+            f"<h2>{APP_NAME}</h2>"
+            f"<p><b>Version:</b> {APP_VERSION}</p>"
+            f"<p><b>Copyright:</b> {APP_COPYRIGHT}</p>"
+            f"<p>A tool for converting and managing media files.</p>"
+            f"<hr>"
+            f"<p><b>Python Version:</b><br>{sys.version.split()[0]}</p>"
+            f"<hr>"
+            f"<p><b>Tools and Libraries Used:</b><br>{TOOLS_USED_TEXT}</p>"
+            f"<hr>"
+            f"<p><b>Third-Party Licenses:</b><br>{LICENSES_TEXT}</p>"
+            f"<hr>"
+            f"<p><b>GitHub Repository:</b> <a href='{GITHUB_URL}'>retro_converter_tool on GitHub</a></p>"
+        )
 
-        num_jobs = triggered_action.data()
-
-        if isinstance(num_jobs, int) and num_jobs > 0:
-            config.settings.CONCURRENT_JOBS = num_jobs
-            save_app_settings()
-            if self.statusbar:
-                self.statusbar.showMessage(f"Max concurrent jobs set to {num_jobs}.")
-
-            for act in self.concurrent_job_actions:
-                if act is not triggered_action:
-                    act.setChecked(False)
-
-            if not triggered_action.isChecked():
-                triggered_action.setChecked(True)
-        else:
-            if utils.APP_LOGGER:
-                utils.APP_LOGGER.error(f"Invalid data for concurrent jobs action: {triggered_action.data() if triggered_action else 'Unknown'}")
-
+    # Threading and conversion methods
     def _ensure_thread_stopped(self):
         """Ensures the conversion thread is properly stopped."""
         if self.conversion_thread and self.conversion_thread.isRunning():
             self.conversion_thread.request_stop()
-            # Wait with a timeout for thread to finish
-            if not self.conversion_thread.wait(3000):  # 3-second timeout
+            if not self.conversion_thread.wait(THREAD_STOP_TIMEOUT):
                 self._emit_or_print("WARNING: Conversion thread did not stop gracefully, forcing termination.",
-                                    fallback_color_code="yellow")
-                self.conversion_thread.terminate()  # Force termination as last resort
+                                  fallback_color_code="yellow")
+                self.conversion_thread.terminate()
             self.conversion_thread = None
 
     @Slot()
     def _on_about_to_quit(self):
+        """Handle application quit signal."""
         print("DEBUG: QApplication.aboutToQuit signal received in ConverterWindow.")
         self._ensure_thread_stopped()
         if self.conversion_thread and self.conversion_thread.isRunning():
             print("DEBUG: Conversion thread is running, requesting stop during app quit.")
             self.conversion_thread.request_stop()
-            if not self.conversion_thread.wait(2000):
-                print(
-                    "DEBUG: Conversion thread did not stop gracefully after 2s in aboutToQuit.")
+            if not self.conversion_thread.wait(QUIT_THREAD_TIMEOUT):
+                print("DEBUG: Conversion thread did not stop gracefully after 2s in aboutToQuit.")
             else:
                 print("DEBUG: Conversion thread stopped gracefully in aboutToQuit.")
         else:
@@ -546,312 +498,75 @@ class ConverterWindow(QMainWindow):
 
     @Slot()
     def _request_conversion_stop(self):
+        """Request conversion to stop."""
         if self.conversion_thread and self.conversion_thread.isRunning():
             self.conversion_thread.request_stop()
-            if self.overall_cancel_button:
-                self.overall_cancel_button.setEnabled(False)
-            if self.file_cancel_button:
-                self.file_cancel_button.setEnabled(False)
+            
+            for button in [self.overall_cancel_button, self.file_cancel_button]:
+                if button:
+                    button.setEnabled(False)
+            
             if self.statusbar:
                 self.statusbar.showMessage("Cancellation requested...")
 
+    # Settings and job management
     @Slot()
-    def start_conversion(self):
-        if self.conversion_thread and self.conversion_thread.isRunning():
-            QMessageBox.warning(
-                self, "Busy", "A conversion is already in progress.")
-            return
-        if not self.selected_media_type_details:
-            QMessageBox.warning(self, "Setup Error",
-                                "Please select a valid job and media type.")
+    def _handle_concurrent_jobs_changed(self):
+        """Handle concurrent jobs setting change."""
+        triggered_action = self.sender()
+        if not isinstance(triggered_action, QAction):
+            if utils.APP_LOGGER:
+                utils.APP_LOGGER.warning(f"_handle_concurrent_jobs_changed called by non-QAction sender: {type(triggered_action)}")
             return
 
-        job_output_ext_config = self.selected_media_type_details.get(
-            "output_ext", [])
-        if job_output_ext_config and not self.selected_output_filter:
-            QMessageBox.warning(
-                self, "Setup Error", "Please select an output file type for this job.")
-            return
+        num_jobs = triggered_action.data()
+        if isinstance(num_jobs, int) and num_jobs > 0:
+            config.settings.CONCURRENT_JOBS = num_jobs
+            save_app_settings()
+            
+            if self.statusbar:
+                self.statusbar.showMessage(f"Max concurrent jobs set to {num_jobs}.")
 
-        selected_files_data = []
-        for i, row_data in enumerate(self.table_data):
-            if row_data[COL_CHECK]:
-                item_type_in_table = row_data[COL_TYPE].lower()
-                current_active_input_exts = self.active_input_filters
-                if not current_active_input_exts and self.selected_media_type_details:
-                    current_active_input_exts = set(
-                        self.selected_media_type_details.get("input_ext", []))
-
-                if not self.selected_media_type_details or \
-                   not current_active_input_exts or \
-                   item_type_in_table in current_active_input_exts:
-                    selected_files_data.append(row_data)
-
-        if not selected_files_data:
-            QMessageBox.warning(
-                self, "No Files", "No files selected for conversion (or none match current input filters).")
-            return
-
-        total_files_to_process = len(selected_files_data)
-        selected_file_paths = [data[COL_PATH] for data in selected_files_data]
-
-        output_folder = None
-        job_requires_output_folder_ui_section = self.selected_media_type_details.get(
-            "requires_output_folder", False)
-
-        if job_requires_output_folder_ui_section and self.output_same_folder_checkbox and not self.output_same_folder_checkbox.isChecked():
-            if self.output_folder_path_display:
-                output_folder = self.output_folder_path_display.text().strip()
-            if not output_folder:
-                QMessageBox.warning(self, "Output Folder Missing",
-                                    "Please select an output folder or choose 'Output in same folder'.")
-                return
-            if not os.path.isdir(output_folder):
-                if not os.path.exists(output_folder):
-                    try:
-                        os.makedirs(output_folder)
-                        if self.log_output_text:
-                            self.log_output_text.append(
-                                f"INFO: Created output directory: {output_folder}")
-                    except Exception as e:
-                        QMessageBox.critical(
-                            self, "Output Folder Error", f"Could not create output folder: {output_folder}\nError: {e}")
-                        return
-                else:
-                    QMessageBox.critical(
-                        self, "Output Folder Error", f"Specified output path is not a directory: {output_folder}")
-                    return
-
-            estimated_min_gb = 0.1
-            free_space_gb = utils.get_free_disk_space_gb(output_folder)
-            if free_space_gb is not None and free_space_gb < estimated_min_gb:
-                QMessageBox.critical(self, "Insufficient Disk Space",
-                                     f"Output location '{output_folder}' has less than {estimated_min_gb:.1f}GB free "
-                                     f"(approximately {free_space_gb:.2f}GB available). Please select another location or free up space.")
-                return
-            elif free_space_gb is None:
-                if QMessageBox.question(self, "Disk Space Unknown",
-                                        "Could not determine free disk space for the output location. Continue anyway?",
-                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                        QMessageBox.StandardButton.No) == QMessageBox.StandardButton.No:
-                    return
-
-        primary_out_ext = self.selected_output_filter
-        secondary_out_ext = None
-
-        possible_primary_outputs = self.selected_media_type_details.get(
-            "output_ext", [])
-        possible_secondary_outputs = self.selected_media_type_details.get(
-            "output_ext_secondary")
-
-        if primary_out_ext and isinstance(possible_primary_outputs, list) and primary_out_ext in possible_primary_outputs:
-            idx = possible_primary_outputs.index(primary_out_ext)
-            if isinstance(possible_secondary_outputs, list) and idx < len(possible_secondary_outputs):
-                secondary_out_ext = possible_secondary_outputs[idx]
-            elif isinstance(possible_secondary_outputs, str) and idx == 0:
-                secondary_out_ext = possible_secondary_outputs
-
-        current_overwrite_files = self.overwrite_files_checkbox.isChecked(
-        ) if self.overwrite_files_checkbox else False
-
-        self.set_ui_enabled_for_conversion(False)
-
-        if self.progress_group_box:
-            self.progress_group_box.setVisible(True)
-
-        if self.overall_label:
-            self.overall_label.setText(
-                f"Overall Progress (0/{total_files_to_process} files)")
-        if self.overall_progress_bar:
-            self.overall_progress_bar.setMaximum(
-                total_files_to_process * N_STAGES_PER_FILE)
-            self.overall_progress_bar.setValue(0)
-
-        if self.file_label:
-            self.file_label.setText("Current File: -")
-        if self.file_progress_bar:
-            self.file_progress_bar.setRange(0, 100)
-            self.file_progress_bar.setValue(0)
-
-        if self.overall_cancel_button:
-            self.overall_cancel_button.setEnabled(True)
-        if self.file_cancel_button:
-            self.file_cancel_button.setEnabled(True)
-
-        action_button_text = self.main_action_button.text(
-        ) if self.main_action_button else "Job"
-        if self.statusbar:
-            self.statusbar.showMessage(
-                f"Starting '{action_button_text}' for {total_files_to_process} file(s)...")
-
-        if self.log_output_text and not self.log_output_text.isVisible():
-            if self.toggle_log_button:
-                self.toggle_log_button.setChecked(True)
-        if self.log_output_text:
-            self.log_output_text.clear()
-
-        self.conversion_thread = ConversionWorker(
-            selected_file_paths, self.selected_media_type_details,
-            output_folder, current_overwrite_files,
-            primary_out_ext, secondary_out_ext
-        )
-        self.conversion_thread.status_update.connect(
-            self.handle_overall_progress_update)
-        self.conversion_thread.file_progress_update.connect(
-            self.handle_file_progress_update)
-        self.conversion_thread.output_update.connect(self.handle_output_update)
-        self.conversion_thread.error_update.connect(self.handle_error_update)
-        self.conversion_thread.critical_error_occurred.connect(
-            self.handle_critical_error)
-        self.conversion_thread.finished.connect(
-            self.handle_conversion_finished)
-        self.conversion_thread.start()
-
-    @Slot(str)
-    def handle_critical_error(self, message):
-        QMessageBox.critical(self, "Critical Conversion Error", message)
-        self.set_ui_enabled_for_conversion(True)
-        self.update_convert_button_state()
-        if self.progress_group_box:
-            self.progress_group_box.setVisible(False)
-
-    @Slot(int, int, str)
-    def handle_overall_progress_update(self, current_overall_step, total_overall_steps, phase_description):
-        if self.overall_progress_bar:
-            self.overall_progress_bar.setMaximum(total_overall_steps)
-            self.overall_progress_bar.setValue(current_overall_step)
-
-        parts = phase_description.split(': ', 1)
-        current_op_label = parts[0]
-        current_filename_display = parts[1] if len(parts) > 1 else ""
-
-        if self.overall_label:
-            self.overall_label.setText(
-                f"Overall: {phase_description} ({current_overall_step}/{total_overall_steps} stages)")
-        if self.statusbar:
-            self.statusbar.showMessage(f"Overall: {phase_description}")
-
-        if "Preparing" in current_op_label or "Copying" in current_op_label or \
-           (self.file_label and (self.file_label.text() == "Current File: -" or
-                                 (current_filename_display and current_filename_display not in self.file_label.text()))):
-            if self.file_label:
-                self.file_label.setText(f"Current: {current_filename_display}")
-            if self.file_progress_bar:
-                self.file_progress_bar.setRange(0, 100)
-                self.file_progress_bar.setValue(0)
-
-        if self.file_progress_bar:
-            if "Preparing" in current_op_label or "Copying" in current_op_label:
-                self.file_progress_bar.setValue(33)
-            elif "Converting" in current_op_label:
-                self.file_progress_bar.setValue(66)
-            elif "Finalizing" in current_op_label or "File failed" in current_op_label or "Interrupted" in current_op_label:
-                self.file_progress_bar.setValue(100)
-
-    @Slot(int)
-    def handle_file_progress_update(self, percentage):
-        if self.file_progress_bar:
-            if percentage == 100:
-                self.file_progress_bar.setValue(100)
-
-    @Slot(int, int)
-    def handle_conversion_finished(self, success_count, fail_count):
-        total_attempted = success_count + fail_count
-        status_msg = f"Job finished. Success: {success_count}, Failed: {fail_count} (Total attempted: {total_attempted})."
-        if self.statusbar:
-            self.statusbar.showMessage(status_msg)
-        if self.log_output_text:
-            self.log_output_text.append(f"\n<b>{status_msg}</b>")
-
-        if self.overall_progress_bar:
-            self.overall_progress_bar.setValue(
-                self.overall_progress_bar.maximum())
-
-        if self.file_label:
-            self.file_label.setText("Finished.")
-        if self.file_progress_bar:
-            self.file_progress_bar.setValue(100 if total_attempted > 0 else 0)
-
-        if self.overall_cancel_button:
-            self.overall_cancel_button.setEnabled(False)
-        if self.file_cancel_button:
-            self.file_cancel_button.setEnabled(False)
-
-        self.set_ui_enabled_for_conversion(True)
-        self.conversion_thread = None
-        self.update_convert_button_state()
-
-    def set_ui_enabled_for_conversion(self, enabled):
-        if self.add_files_button:
-            self.add_files_button.setEnabled(enabled)
-        if self.add_folder_button:
-            self.add_folder_button.setEnabled(enabled)
-        if self.recursive_checkbox:
-            self.recursive_checkbox.setEnabled(enabled)
-        if self.file_table:
-            self.file_table.setEnabled(enabled)
-        if self.job_type_combo:
-            self.job_type_combo.setEnabled(enabled)
-        if self.output_same_folder_checkbox:
-            self.output_same_folder_checkbox.setEnabled(enabled)
-        if self.delete_input_checkbox:
-            self.delete_input_checkbox.setEnabled(enabled)
-        if self.overwrite_files_checkbox:
-            self.overwrite_files_checkbox.setEnabled(enabled)
-        if self.actionSettings:
-            self.actionSettings.setEnabled(enabled)
-
-        if enabled:
-            self.update_ui_for_job_selection()
-            if self.progress_group_box:
-                self.progress_group_box.setVisible(False)
-            self.update_convert_button_state()
+            # Update action states
+            for action in self.concurrent_job_actions:
+                action.setChecked(action is triggered_action)
         else:
-            if self.media_type_combo:
-                self.media_type_combo.setEnabled(False)
-            if self.select_input_types_button:
-                self.select_input_types_button.setEnabled(False)
-            if self.select_output_type_button:
-                self.select_output_type_button.setEnabled(False)
-            if self.output_folder_group_box:
-                self.output_folder_group_box.setEnabled(False)
-            if self.main_action_button:
-                self.main_action_button.setEnabled(False)
-
-            if self.progress_group_box:
-                self.progress_group_box.setVisible(True)
-            if self.overall_cancel_button:
-                self.overall_cancel_button.setEnabled(True)
-            if self.file_cancel_button:
-                self.file_cancel_button.setEnabled(True)
+            if utils.APP_LOGGER:
+                utils.APP_LOGGER.error(f"Invalid data for concurrent jobs action: {triggered_action.data() if triggered_action else 'Unknown'}")
 
     def _populate_job_types(self):
+        """Populate the job type combo box."""
         if not self.job_type_combo:
             return
+        
         self.job_type_combo.blockSignals(True)
         self.job_type_combo.clear()
         self.job_type_combo.addItem("(Select Job Type)")
+        
         for job in menu_definitions.JOB_DEFINITIONS:
             self.job_type_combo.addItem(job["job_name"])
+        
         self.job_type_combo.blockSignals(False)
         self.job_type_combo.setCurrentIndex(0)
 
+    # Event handlers for UI state changes
     @Slot(bool)
     def _on_output_same_folder_toggled(self, checked):
+        """Handle output same folder checkbox toggle."""
         show_custom_output_widgets = not checked
-        if self.select_output_folder_button:
-            self.select_output_folder_button.setVisible(
-                show_custom_output_widgets)
-        if self.output_folder_path_display:
-            self.output_folder_path_display.setVisible(
-                show_custom_output_widgets)
+        
+        for widget in [self.select_output_folder_button, self.output_folder_path_display]:
+            if widget:
+                widget.setVisible(show_custom_output_widgets)
 
         if checked and self.output_folder_path_display:
             self.output_folder_path_display.clear()
+        
         self.update_convert_button_state()
 
     @Slot(bool)
     def _on_delete_input_toggled(self, checked):
+        """Handle delete input checkbox toggle."""
         config.settings.DELETE_SOURCE_ON_SUCCESS = checked
         if self.statusbar:
             self.statusbar.showMessage(
@@ -859,502 +574,247 @@ class ConverterWindow(QMainWindow):
 
     @Slot(str)
     def _on_job_type_changed(self, selected_job_name):
+        """Handle job type selection change."""
         if not self.media_type_combo:
             return
+        
+        self._reset_job_selection()
+        
+        if selected_job_name and selected_job_name != "(Select Job Type)":
+            self._populate_media_types(selected_job_name)
+
+        self.media_type_combo.setCurrentIndex(0)
+        self.update_ui_for_job_selection()
+        
+        if self.statusbar:
+            self.statusbar.showMessage(f"Job type '{selected_job_name}' selected. Now select a media type.")
+
+    def _reset_job_selection(self):
+        """Reset job-related selections."""
         self.media_type_combo.blockSignals(True)
         self.media_type_combo.clear()
         self.media_type_combo.addItem("(Select Media Type)")
-
+        self.media_type_combo.blockSignals(False)
+        
         self.selected_job_details = None
         self.selected_media_type_details = None
         self.active_input_filters.clear()
         self.selected_output_filter = None
 
-        if selected_job_name and selected_job_name != "(Select Job Type)":
-            for job_def in menu_definitions.JOB_DEFINITIONS:
-                if job_def["job_name"] == selected_job_name:
-                    self.selected_job_details = job_def
-                    for media_type in job_def.get("media_types", []):
-                        self.media_type_combo.addItem(media_type["media_name"])
-                    break
-
-        self.media_type_combo.blockSignals(False)
-        self.media_type_combo.setCurrentIndex(0)
-        self.update_ui_for_job_selection()
-        if self.statusbar:
-            self.statusbar.showMessage(
-                f"Job type '{selected_job_name}' selected. Now select a media type.")
+    def _populate_media_types(self, job_name):
+        """Populate media types for the selected job."""
+        for job_def in menu_definitions.JOB_DEFINITIONS:
+            if job_def["job_name"] == job_name:
+                self.selected_job_details = job_def
+                for media_type in job_def.get("media_types", []):
+                    self.media_type_combo.addItem(media_type["media_name"])
+                break
 
     @Slot(str)
     def _on_media_type_changed(self, selected_media_name):
+        """Handle media type selection change."""
+        self._reset_media_selection()
+        
+        if self.selected_job_details and selected_media_name and selected_media_name != "(Select Media Type)":
+            self._setup_media_type_details(selected_media_name)
+
+        self.update_ui_for_media_selection()
+
+    def _reset_media_selection(self):
+        """Reset media type-related selections."""
         self.selected_media_type_details = None
         self.active_input_filters.clear()
         self.selected_output_filter = None
 
-        if self.selected_job_details and selected_media_name and selected_media_name != "(Select Media Type)":
-            for media_def in self.selected_job_details.get("media_types", []):
-                if media_def["media_name"] == selected_media_name:
-                    self.selected_media_type_details = media_def
-                    self.active_input_filters = set(
-                        self.selected_media_type_details.get("input_ext", []))
-                    output_exts = self.selected_media_type_details.get(
-                        "output_ext", [])
-                    if output_exts:
-                        if isinstance(output_exts, list) and len(output_exts) == 1 and output_exts[0]:
-                            self.selected_output_filter = output_exts[0]
-                        elif isinstance(output_exts, str):
-                            self.selected_output_filter = output_exts
-                    break
+    def _setup_media_type_details(self, media_name):
+        """Setup details for the selected media type."""
+        for media_def in self.selected_job_details.get("media_types", []):
+            if media_def["media_name"] == media_name:
+                self.selected_media_type_details = media_def
+                self.active_input_filters = set(self.selected_media_type_details.get("input_ext", []))
+                
+                # Auto-select output if only one option
+                output_exts = self.selected_media_type_details.get("output_ext", [])
+                if output_exts:
+                    if isinstance(output_exts, list) and len(output_exts) == 1 and output_exts[0]:
+                        self.selected_output_filter = output_exts[0]
+                    elif isinstance(output_exts, str):
+                        self.selected_output_filter = output_exts
+                break
 
-        self.update_ui_for_media_selection()
-
+    # UI update methods with better organization
     def update_ui_for_job_selection(self):
+        """Update UI elements based on job selection."""
         job_is_selected = bool(self.selected_job_details)
+        
         if self.media_type_combo:
             self.media_type_combo.setEnabled(job_is_selected)
 
         if not job_is_selected:
-            self.selected_media_type_details = None
-            self.active_input_filters.clear()
-            self.selected_output_filter = None
+            self._reset_media_selection()
 
         self.update_ui_for_media_selection()
 
     def update_ui_for_media_selection(self):
+        """Update UI elements based on media type selection."""
         media_is_selected = bool(self.selected_media_type_details)
+        
+        # Get display strings
+        action_text, input_ext_str, output_ext_str = self._get_display_strings()
+        
+        # Update labels and buttons
+        self._update_ui_labels(action_text, input_ext_str, output_ext_str)
+        
+        # Update button states
+        self._update_button_states(media_is_selected)
+        
+        # Update output folder visibility
+        self._update_output_folder_ui()
+        
+        # Apply filters and update state
+        self._apply_filter_to_table()
+        self.update_convert_button_state()
 
+    def _get_display_strings(self):
+        """Get the display strings for UI elements."""
         action_text = "START JOB"
         input_ext_str = "N/A"
         output_ext_str = "N/A"
-        requires_output_folder_ui_section = False
-        can_select_output_type = False
 
         if self.selected_job_details:
-            action_text = self.selected_job_details.get(
-                "action_text", "START JOB").upper()
+            action_text = self.selected_job_details.get("action_text", "START JOB").upper()
 
-        if media_is_selected and self.selected_media_type_details:
-            action_text = self.selected_media_type_details.get(
-                "action_text", action_text).upper()
+        if self.selected_media_type_details:
+            action_text = self.selected_media_type_details.get("action_text", action_text).upper()
+            input_ext_str = self._get_input_extensions_string()
+            output_ext_str = self._get_output_extensions_string()
 
-            current_display_input_exts = self.active_input_filters
-            if not current_display_input_exts:
-                current_display_input_exts = set(
-                    self.selected_media_type_details.get("input_ext", []))
-            input_ext_str = ", ".join([f".{ext}" for ext in sorted(
-                list(current_display_input_exts))]) if current_display_input_exts else "Any"
+        return action_text, input_ext_str, output_ext_str
 
-            possible_output_exts = self.selected_media_type_details.get(
-                "output_ext", [])
-            if self.selected_output_filter:
-                output_ext_str = f".{self.selected_output_filter}"
-            elif not possible_output_exts:
-                output_ext_str = "N/A (Folder/Info)" if not self.selected_media_type_details.get(
-                    "requires_output_folder", False) else "Folder"
-            elif possible_output_exts and not self.selected_output_filter:
-                output_ext_str = "(Select Output)"
+    def _get_input_extensions_string(self):
+        """Get formatted input extensions string."""
+        current_display_input_exts = self.active_input_filters or set(
+            self.selected_media_type_details.get("input_ext", []))
+        
+        return (", ".join([f".{ext}" for ext in sorted(list(current_display_input_exts))]) 
+                if current_display_input_exts else "Any")
 
-            if isinstance(possible_output_exts, list) and len(possible_output_exts) > 1:
-                can_select_output_type = True
-            elif isinstance(possible_output_exts, list) and len(possible_output_exts) == 1 and possible_output_exts[0]:
-                can_select_output_type = False
-            elif isinstance(possible_output_exts, str) and possible_output_exts:
-                can_select_output_type = False
-            elif not possible_output_exts:
-                can_select_output_type = False
+    def _get_output_extensions_string(self):
+        """Get formatted output extensions string."""
+        possible_output_exts = self.selected_media_type_details.get("output_ext", [])
+        
+        if self.selected_output_filter:
+            return f".{self.selected_output_filter}"
+        elif not possible_output_exts:
+            return ("N/A (Folder/Info)" if not self.selected_media_type_details.get("requires_output_folder", False) 
+                   else "Folder")
+        elif possible_output_exts and not self.selected_output_filter:
+            return "(Select Output)"
+        
+        return "N/A"
 
-            requires_output_folder_ui_section = self.selected_media_type_details.get(
-                "requires_output_folder", False)
+    def _update_ui_labels(self, action_text, input_ext_str, output_ext_str):
+        """Update UI labels with new text."""
+        label_updates = [
+            (self.main_action_button, action_text),
+            (self.input_file_types_label, f"Input: {input_ext_str}"),
+            (self.output_file_types_label, f"Output: {output_ext_str}")
+        ]
+        
+        for widget, text in label_updates:
+            if widget:
+                widget.setText(text)
 
-        if self.main_action_button:
-            self.main_action_button.setText(action_text)
-        if self.input_file_types_label:
-            self.input_file_types_label.setText(f"Input: {input_ext_str}")
-        if self.output_file_types_label:
-            self.output_file_types_label.setText(f"Output: {output_ext_str}")
+    def _update_button_states(self, media_is_selected):
+        """Update button enabled states."""
+        can_select_input_types = (media_is_selected and 
+                                 bool(self.selected_media_type_details.get("input_ext") 
+                                     if self.selected_media_type_details else False))
+        
+        possible_output_exts = (self.selected_media_type_details.get("output_ext", []) 
+                               if self.selected_media_type_details else [])
+        can_select_output_type = (isinstance(possible_output_exts, list) and 
+                                 len(possible_output_exts) > 1)
 
-        can_select_input_types = media_is_selected and bool(self.selected_media_type_details.get(
-            "input_ext") if self.selected_media_type_details else False)
         if self.select_input_types_button:
             self.select_input_types_button.setEnabled(can_select_input_types)
-
+        
         if self.select_output_type_button:
             self.select_output_type_button.setEnabled(can_select_output_type)
 
+    def _update_output_folder_ui(self):
+        """Update output folder UI visibility and state."""
+        requires_output_folder = (self.selected_media_type_details.get("requires_output_folder", False) 
+                                 if self.selected_media_type_details else False)
+        
         if self.output_folder_group_box:
-            self.output_folder_group_box.setEnabled(
-                requires_output_folder_ui_section)
+            self.output_folder_group_box.setEnabled(requires_output_folder)
 
-        output_in_same_folder = self.output_same_folder_checkbox.isChecked(
-        ) if self.output_same_folder_checkbox else True
-        show_custom_output_path_widgets = requires_output_folder_ui_section and not output_in_same_folder
+        output_in_same_folder = (self.output_same_folder_checkbox.isChecked() 
+                               if self.output_same_folder_checkbox else True)
+        show_custom_output_widgets = requires_output_folder and not output_in_same_folder
 
-        if self.select_output_folder_button:
-            self.select_output_folder_button.setVisible(
-                show_custom_output_path_widgets)
-        if self.output_folder_path_display:
-            self.output_folder_path_display.setVisible(
-                show_custom_output_path_widgets)
+        for widget in [self.select_output_folder_button, self.output_folder_path_display]:
+            if widget:
+                widget.setVisible(show_custom_output_widgets)
 
-        if not requires_output_folder_ui_section or output_in_same_folder:
+        if not requires_output_folder or output_in_same_folder:
             if self.output_folder_path_display:
                 self.output_folder_path_display.clear()
 
-        self._apply_filter_to_table()
-        self.update_convert_button_state()
-
-    @Slot()
-    def _on_select_input_types_clicked(self):
-        if not self.selected_media_type_details:
-            if self.statusbar:
-                self.statusbar.showMessage(
-                    "Please select a job and media type first.", 3000)
-            return
-
-        possible_input_exts = self.selected_media_type_details.get(
-            "input_ext", [])
-        if not possible_input_exts:
-            if self.statusbar:
-                self.statusbar.showMessage(
-                    "No specific input types to filter for this selection.", 3000)
-            return
-
-        menu = QMenu(self)
-        for ext in sorted(possible_input_exts):
-            action = QAction(f".{ext}", self)
-            action.setCheckable(True)
-            action.setChecked(ext in self.active_input_filters)
-            action.toggled.connect(
-                lambda checked, current_ext=ext: self._on_input_filter_type_toggled(checked, current_ext))
-            menu.addAction(action)
-
-        if self.select_input_types_button:
-            button_pos = self.select_input_types_button.mapToGlobal(
-                QPoint(0, self.select_input_types_button.height()))
-            menu.exec(button_pos)
-
-    @Slot(bool, str)
-    def _on_input_filter_type_toggled(self, checked, extension):
-        if checked:
-            self.active_input_filters.add(extension)
-        else:
-            self.active_input_filters.discard(extension)
-
-        active_filter_display_list = sorted(list(self.active_input_filters))
-        if self.input_file_types_label:
-            if active_filter_display_list:
-                self.input_file_types_label.setText(
-                    f"Input: {', '.join(['.' + ext for ext in active_filter_display_list])}")
-            elif self.selected_media_type_details:
-                all_media_exts = self.selected_media_type_details.get(
-                    "input_ext", [])
-                self.input_file_types_label.setText(
-                    f"Input: {', '.join(['.' + ext for ext in all_media_exts]) if all_media_exts else 'Any'}")
-            else:
-                self.input_file_types_label.setText("Input: N/A")
-
-        if self.statusbar:
-            self.statusbar.showMessage(
-                f"Input filter updated. Active: {', '.join(active_filter_display_list) if active_filter_display_list else 'None (showing all for media type)'}", 3000)
-        self._apply_filter_to_table()
-        self.update_convert_button_state()
-
-    @Slot()
-    def _on_select_output_type_clicked(self):
-        if not self.selected_media_type_details:
-            if self.statusbar:
-                self.statusbar.showMessage(
-                    "Please select a media type first.", 3000)
-            return
-
-        possible_output_exts = self.selected_media_type_details.get(
-            "output_ext", [])
-        if not isinstance(possible_output_exts, list) or not possible_output_exts:
-            if self.statusbar:
-                self.statusbar.showMessage(
-                    "No selectable output types for this media.", 3000)
-            return
-
-        menu = QMenu(self)
-        for ext_string in possible_output_exts:
-            if not ext_string:
-                continue
-            action = QAction(f".{ext_string}", self)
-            action.setCheckable(True)
-            action.setChecked(ext_string == self.selected_output_filter)
-            action.triggered.connect(
-                lambda checked_status=False, bound_ext_string=ext_string: self._on_output_filter_type_selected(bound_ext_string))
-            menu.addAction(action)
-
-        if self.select_output_type_button:
-            button_pos = self.select_output_type_button.mapToGlobal(
-                QPoint(0, self.select_output_type_button.height()))
-            menu.exec(button_pos)
-
-    @Slot(str)
-    def _on_output_filter_type_selected(self, extension):
-        self.selected_output_filter = extension
-        if self.output_file_types_label:
-            self.output_file_types_label.setText(f"Output: .{extension}")
-        if self.statusbar:
-            self.statusbar.showMessage(
-                f"Output type set to: .{extension}", 3000)
-        self.update_convert_button_state()
-
-    def _apply_filter_to_table(self):
-        if not self.file_table:
-            return
-
-        visible_exts_for_current_selection = self.active_input_filters
-        if not visible_exts_for_current_selection and self.selected_media_type_details:
-            visible_exts_for_current_selection = set(
-                self.selected_media_type_details.get("input_ext", []))
-
-        for i in range(self.file_table.rowCount()):
-            row_data_type_str = self.table_data[i][COL_TYPE].lower()
-
-            is_enabled = False
-            if not self.selected_media_type_details:
-                is_enabled = True
-            elif visible_exts_for_current_selection:
-                if row_data_type_str in visible_exts_for_current_selection:
-                    is_enabled = True
-
-            self.set_row_enabled_state(i, is_enabled)
-
-            if not is_enabled and self.table_data[i][COL_CHECK]:
-                self.table_data[i][COL_CHECK] = False
-                item = self.file_table.item(i, COL_CHECK)
-                if item:
-                    item.setCheckState(Qt.CheckState.Unchecked)
-
-        self.update_convert_button_state()
-
-    @Slot()
-    def _on_select_output_folder_clicked(self):
-        if not self.output_folder_path_display:
-            return
-        current_path = self.output_folder_path_display.text() or os.path.expanduser("~")
-        folder = QFileDialog.getExistingDirectory(
-            self.ui, "Select Output Folder", current_path)
-        if folder:
-            self.output_folder_path_display.setText(os.path.normpath(folder))
-        self.update_convert_button_state()
-
-    @Slot()
-    def update_convert_button_state(self):
-        if not self.main_action_button:
-            return
-
-        job_and_media_selected = bool(self.selected_media_type_details)
-
-        output_type_ok = True
-        if self.selected_media_type_details:
-            defined_output_exts = self.selected_media_type_details.get(
-                "output_ext", [])
-            if defined_output_exts:
-                output_type_ok = bool(self.selected_output_filter)
-
-        files_checked_and_active = False
-        if self.file_table:
-            for i, row_data in enumerate(self.table_data):
-                if row_data[COL_CHECK]:
-                    item_type_in_table = row_data[COL_TYPE].lower()
-                    current_filter_set = self.active_input_filters
-                    if not current_filter_set and self.selected_media_type_details:
-                        current_filter_set = set(
-                            self.selected_media_type_details.get("input_ext", []))
-
-                    if not self.selected_media_type_details or \
-                       not current_filter_set or \
-                       item_type_in_table in current_filter_set:
-                        files_checked_and_active = True
-                        break
-
-        output_folder_ok = True
-        if self.selected_media_type_details and self.selected_media_type_details.get("requires_output_folder", False):
-            if self.output_same_folder_checkbox and not self.output_same_folder_checkbox.isChecked():
-                if self.output_folder_path_display and not self.output_folder_path_display.text():
-                    output_folder_ok = False
-
-        self.main_action_button.setEnabled(
-            job_and_media_selected and
-            output_type_ok and
-            files_checked_and_active and
-            output_folder_ok
-        )
-
-    @Slot(QPoint)
-    def _show_file_table_context_menu(self, position: QPoint):
-        if not self.file_table:
-            return
-        menu = QMenu(self)
-
-        select_all_action = menu.addAction("Select all (visible/active)")
-        clear_selection_action = menu.addAction("Clear selection in rows")
-        remove_selected_action = menu.addAction("Remove selected rows")
-        menu.addSeparator()
-        clear_all_action = menu.addAction("Clear all items from list")
-
-        select_all_action.triggered.connect(self._on_table_select_all)
-        clear_selection_action.triggered.connect(
-            self._on_table_clear_selection)
-        remove_selected_action.triggered.connect(
-            self._on_table_remove_selected)
-        clear_all_action.triggered.connect(self.clear_input_list)
-
-        menu.exec(self.file_table.mapToGlobal(position))
-
-    @Slot()
-    def _on_table_select_all(self):
-        if not self.file_table:
-            return
-        for i in range(len(self.table_data)):
-            item_chk_widget = self.file_table.item(i, COL_CHECK)
-            if item_chk_widget and item_chk_widget.flags() & Qt.ItemFlag.ItemIsEnabled:
-                self.table_data[i][COL_CHECK] = True
-                item_chk_widget.setCheckState(Qt.CheckState.Checked)
-        self.update_convert_button_state()
-
-    @Slot()
-    def _on_table_clear_selection(self):
-        if not self.file_table:
-            return
-        for i in range(len(self.table_data)):
-            self.table_data[i][COL_CHECK] = False
-            item = self.file_table.item(i, COL_CHECK)
-            if item:
-                item.setCheckState(Qt.CheckState.Unchecked)
-        self.update_convert_button_state()
-
-    @Slot()
-    def _on_table_remove_selected(self):
-        removed_count = 0
-        for i in range(len(self.table_data) - 1, -1, -1):
-            if self.table_data[i][COL_CHECK]:
-                del self.table_data[i]
-                removed_count += 1
-
-        if removed_count > 0:
-            self.update_table_widget()
-            if self.statusbar:
-                self.statusbar.showMessage(
-                    f"{removed_count} item(s) removed. {len(self.table_data)} remaining.")
-        self.update_convert_button_state()
-
-    @Slot()
-    def open_settings(self):
-        dialog = SettingsDialog(self.ui)
-        if dialog.exec():
-            if self.statusbar:
-                self.statusbar.showMessage("Settings updated and saved.")
-            if self.delete_input_checkbox:
-                self.delete_input_checkbox.setChecked(
-                    config.settings.DELETE_SOURCE_ON_SUCCESS)
-        else:
-            if self.statusbar:
-                self.statusbar.showMessage("Settings dialog cancelled.")
-
+    # File and folder handling methods
     @Slot()
     def add_files(self):
-        dialog_filter_name = "All Supported Files"
-        current_input_exts_to_use_for_dialog = set(
-            menu_definitions.ALL_VALID_INPUT_EXTENSIONS)
-
-        if self.selected_media_type_details:
-            media_specific_exts = self.selected_media_type_details.get(
-                "input_ext", [])
-            if media_specific_exts:
-                current_input_exts_to_use_for_dialog = set(media_specific_exts)
-                media_name = self.selected_media_type_details.get(
-                    "media_name", "Current Job")
-                dialog_filter_name = f"{media_name} Files"
-
-        patterns = [
-            f"*.{ext}" for ext in sorted(list(current_input_exts_to_use_for_dialog))]
+        """Add files through file dialog."""
+        dialog_filter_name, current_input_exts = self._get_file_dialog_filter()
+        
+        patterns = [f"*.{ext}" for ext in sorted(list(current_input_exts))]
         dialog_filter_string = f"{dialog_filter_name} ({' '.join(patterns)});;All Files (*.*)"
 
-        files, _ = QFileDialog.getOpenFileNames(
-            self.ui, "Select Files", "", dialog_filter_string)
+        files, _ = QFileDialog.getOpenFileNames(self.ui, "Select Files", "", dialog_filter_string)
         if files:
-            self.process_added_paths(files, from_add_files_dialog=True,
-                                     dialog_filter_exts=current_input_exts_to_use_for_dialog)
+            self.process_added_paths(files, from_add_files_dialog=True, 
+                                   dialog_filter_exts=current_input_exts)
+
+    def _get_file_dialog_filter(self):
+        """Get file dialog filter based on current selection."""
+        dialog_filter_name = "All Supported Files"
+        current_input_exts = set(menu_definitions.ALL_VALID_INPUT_EXTENSIONS)
+
+        if self.selected_media_type_details:
+            media_specific_exts = self.selected_media_type_details.get("input_ext", [])
+            if media_specific_exts:
+                current_input_exts = set(media_specific_exts)
+                media_name = self.selected_media_type_details.get("media_name", "Current Job")
+                dialog_filter_name = f"{media_name} Files"
+
+        return dialog_filter_name, current_input_exts
 
     @Slot()
     def add_folder(self):
+        """Add folder through folder dialog."""
         folder = QFileDialog.getExistingDirectory(self.ui, "Select Folder")
         if folder:
             self.process_added_paths([folder])
 
     @Slot()
     def clear_input_list(self):
+        """Clear the input file list."""
         self.table_data = []
         self.update_table_widget()
         if self.statusbar:
             self.statusbar.showMessage("Input list cleared.")
         self.update_convert_button_state()
 
-    @Slot(int, int)
-    def handle_cell_click(self, row, column):
-        if not self.file_table or column != COL_CHECK or not (0 <= row < len(self.table_data)):
-            return
-
-        item_flags = self.file_table.item(row, column).flags()
-        if item_flags & Qt.ItemFlag.ItemIsEnabled:
-            self.table_data[row][COL_CHECK] = not self.table_data[row][COL_CHECK]
-            self.file_table.item(row, COL_CHECK).setCheckState(
-                Qt.CheckState.Checked if self.table_data[row][COL_CHECK] else Qt.CheckState.Unchecked
-            )
-            self.update_convert_button_state()
-        else:
-            if self.statusbar:
-                self.statusbar.showMessage(
-                    "This file type is currently filtered out. Adjust input filters to select.", 3000)
-
-    @Slot(bool)
-    def toggle_log_visibility(self, checked):
-        if self.log_output_text:
-            self.log_output_text.setVisible(checked)
-        if self.clear_log_button:
-            self.clear_log_button.setVisible(checked)
-        if self.toggle_log_button:
-            self.toggle_log_button.setText(
-                "Hide Log ▲" if checked else "Show Log ▼")
-
-    @Slot()
-    def clear_log(self):
-        if self.log_output_text:
-            self.log_output_text.clear()
-
-    @Slot(str)
-    def handle_output_update(self, message):
-        if self.log_output_text:
-            self.log_output_text.append(message)
-
-    @Slot(str)
-    def handle_error_update(self, message):
-        if self.log_output_text:
-            self.log_output_text.append(f"<font color='red'>{message}</font>")
-
     def process_added_paths(self, paths, from_add_files_dialog=False, dialog_filter_exts=None):
-        is_recursive = self.recursive_checkbox.isChecked(
-        ) if self.recursive_checkbox else False
+        """Process added file/folder paths."""
+        is_recursive = self.recursive_checkbox.isChecked() if self.recursive_checkbox else False
         newly_added_count = 0
-        current_paths_in_table = {row_data[COL_PATH]
-                                  for row_data in self.table_data}
+        current_paths_in_table = {row_data[COL_PATH] for row_data in self.table_data}
 
-        valid_exts_for_adding = set()
-        if from_add_files_dialog and dialog_filter_exts:
-            valid_exts_for_adding = dialog_filter_exts
-        elif self.active_input_filters:
-            valid_exts_for_adding = self.active_input_filters
-        elif self.selected_media_type_details:
-            valid_exts_for_adding = set(
-                self.selected_media_type_details.get("input_ext", []))
-        else:
-            valid_exts_for_adding = set(
-                menu_definitions.ALL_VALID_INPUT_EXTENSIONS)
-
+        valid_exts_for_adding = self._get_valid_extensions_for_adding(
+            from_add_files_dialog, dialog_filter_exts)
+        
         ignored_files_log = []
 
         for item_path_raw in paths:
@@ -1363,40 +823,67 @@ class ConverterWindow(QMainWindow):
                 continue
 
             if os.path.isfile(item_path):
-                file_ext_lower = os.path.splitext(
-                    item_path)[1].lower().lstrip('.')
-                if (not valid_exts_for_adding or file_ext_lower in valid_exts_for_adding) and \
-                   item_path not in current_paths_in_table:
-                    self.table_data.append(
-                        [True, item_path, file_ext_lower.upper()])
-                    newly_added_count += 1
-                elif item_path not in current_paths_in_table:
-                    ignored_files_log.append(os.path.basename(
-                        item_path) + f" (type '.{file_ext_lower}' not in current add filter)")
-
+                newly_added_count += self._process_single_file(
+                    item_path, valid_exts_for_adding, current_paths_in_table, ignored_files_log)
             elif os.path.isdir(item_path):
-                for f_path in self._scan_folder(item_path, is_recursive, valid_exts_for_adding):
-                    if f_path not in current_paths_in_table:
-                        file_ext_lower = os.path.splitext(
-                            f_path)[1].lower().lstrip('.')
-                        self.table_data.append(
-                            [True, f_path, file_ext_lower.upper()])
-                        newly_added_count += 1
+                newly_added_count += self._process_folder(
+                    item_path, is_recursive, valid_exts_for_adding, current_paths_in_table)
 
+        self._finalize_path_processing(newly_added_count, ignored_files_log)
+
+    def _get_valid_extensions_for_adding(self, from_add_files_dialog, dialog_filter_exts):
+        """Get valid extensions for adding files."""
+        if from_add_files_dialog and dialog_filter_exts:
+            return dialog_filter_exts
+        elif self.active_input_filters:
+            return self.active_input_filters
+        elif self.selected_media_type_details:
+            return set(self.selected_media_type_details.get("input_ext", []))
+        else:
+            return set(menu_definitions.ALL_VALID_INPUT_EXTENSIONS)
+
+    def _process_single_file(self, file_path, valid_exts, current_paths, ignored_files):
+        """Process a single file for adding to the list."""
+        file_ext_lower = os.path.splitext(file_path)[1].lower().lstrip('.')
+        
+        if ((not valid_exts or file_ext_lower in valid_exts) and 
+            file_path not in current_paths):
+            self.table_data.append([True, file_path, file_ext_lower.upper()])
+            return 1
+        elif file_path not in current_paths:
+            ignored_files.append(
+                os.path.basename(file_path) + f" (type '.{file_ext_lower}' not in current add filter)")
+        
+        return 0
+
+    def _process_folder(self, folder_path, is_recursive, valid_exts, current_paths):
+        """Process a folder for adding files to the list."""
+        count = 0
+        for f_path in self._scan_folder(folder_path, is_recursive, valid_exts):
+            if f_path not in current_paths:
+                file_ext_lower = os.path.splitext(f_path)[1].lower().lstrip('.')
+                self.table_data.append([True, f_path, file_ext_lower.upper()])
+                count += 1
+        return count
+
+    def _finalize_path_processing(self, newly_added_count, ignored_files_log):
+        """Finalize the path processing operation."""
         if ignored_files_log and self.log_output_text:
             self.log_output_text.append(
-                f"<font color='orange'>WARNING: Files ignored during add (type mismatch or duplicate): {', '.join(ignored_files_log)}</font>")
+                f"<font color='orange'>WARNING: Files ignored during add (type mismatch or duplicate): "
+                f"{', '.join(ignored_files_log)}</font>")
 
         if newly_added_count > 0:
             self.table_data.sort(key=lambda x: x[COL_PATH])
             self.update_table_widget()
 
         if self.statusbar:
-            self.statusbar.showMessage(
-                f"{len(self.table_data)} file(s) in list. ({newly_added_count} added).")
+            self.statusbar.showMessage(f"{len(self.table_data)} file(s) in list. ({newly_added_count} added).")
+        
         self.update_convert_button_state()
 
     def _scan_folder(self, folder_path, recursive, valid_extensions_for_scan):
+        """Scan folder for valid files."""
         found = []
         norm_folder = os.path.normpath(folder_path)
         if not os.path.isdir(norm_folder):
@@ -1421,79 +908,752 @@ class ConverterWindow(QMainWindow):
                     ext_lower = os.path.splitext(f_item)[1].lower().lstrip('.')
                     if not valid_extensions_for_scan or ext_lower in valid_extensions_for_scan:
                         found.append(os.path.normpath(fp))
+            
             if not recursive:
                 break
         return found
 
+    # Table and UI interaction methods
     def update_table_widget(self):
+        """Update the table widget with current data."""
         if not self.file_table:
             return
 
         self.file_table.setRowCount(0)
         self.file_table.setRowCount(len(self.table_data))
 
-        for r_idx, r_data in enumerate(self.table_data):
-            chk_state_from_model, path, type_s_from_model = r_data
-
+        for r_idx, (checked, path, file_type) in enumerate(self.table_data):
+            # Checkbox item
             chk_item = QTableWidgetItem()
-            chk_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable |
-                              Qt.ItemFlag.ItemIsEnabled)
-            chk_item.setCheckState(
-                Qt.CheckState.Checked if chk_state_from_model else Qt.CheckState.Unchecked)
+            chk_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            chk_item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
             self.file_table.setItem(r_idx, COL_CHECK, chk_item)
 
+            # Path item
             self.file_table.setItem(r_idx, COL_PATH, QTableWidgetItem(path))
 
-            type_item = QTableWidgetItem(type_s_from_model)
+            # Type item
+            type_item = QTableWidgetItem(file_type)
             type_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.file_table.setItem(r_idx, COL_TYPE, type_item)
 
         self._apply_filter_to_table()
 
+    @Slot(int, int)
+    def handle_cell_click(self, row, column):
+        """Handle clicks on table cells."""
+        if (not self.file_table or column != COL_CHECK or 
+            not (0 <= row < len(self.table_data))):
+            return
+
+        item = self.file_table.item(row, column)
+        if not item:
+            return
+
+        if item.flags() & Qt.ItemFlag.ItemIsEnabled:
+            self.table_data[row][COL_CHECK] = not self.table_data[row][COL_CHECK]
+            item.setCheckState(
+                Qt.CheckState.Checked if self.table_data[row][COL_CHECK] else Qt.CheckState.Unchecked)
+            self.update_convert_button_state()
+        else:
+            if self.statusbar:
+                self.statusbar.showMessage(
+                    "This file type is currently filtered out. Adjust input filters to select.", 3000)
+
     def set_row_enabled_state(self, r_idx, enabled):
+        """Set the enabled state for a table row."""
         if not self.file_table or not (0 <= r_idx < self.file_table.rowCount()):
             return
 
-        dis_color = self.palette().color(QPalette.ColorGroup.Disabled,
-                                         QPalette.ColorRole.WindowText)
-        en_color = self.palette().color(QPalette.ColorGroup.Normal,
-                                        QPalette.ColorRole.WindowText)
+        palette = self.palette()
+        color = (palette.color(QPalette.ColorGroup.Normal, QPalette.ColorRole.WindowText) if enabled 
+                else palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText))
 
         for c_idx in range(self.file_table.columnCount()):
             item = self.file_table.item(r_idx, c_idx)
             if item:
-                current_flags = item.flags()
-                if enabled:
-                    item.setFlags(current_flags | Qt.ItemFlag.ItemIsEnabled)
-                    item.setForeground(en_color)
-                else:
-                    item.setFlags(current_flags & ~Qt.ItemFlag.ItemIsEnabled)
-                    item.setForeground(dis_color)
+                flags = item.flags()
+                item.setFlags(flags | Qt.ItemFlag.ItemIsEnabled if enabled 
+                             else flags & ~Qt.ItemFlag.ItemIsEnabled)
+                item.setForeground(color)
+
+    def _apply_filter_to_table(self):
+        """Apply current filters to the table."""
+        if not self.file_table:
+            return
+
+        visible_exts = self.active_input_filters or (
+            set(self.selected_media_type_details.get("input_ext", [])) 
+            if self.selected_media_type_details else set())
+
+        for i in range(self.file_table.rowCount()):
+            row_data_type_str = self.table_data[i][COL_TYPE].lower()
+            
+            is_enabled = (not self.selected_media_type_details or 
+                         not visible_exts or 
+                         row_data_type_str in visible_exts)
+
+            self.set_row_enabled_state(i, is_enabled)
+
+            if not is_enabled and self.table_data[i][COL_CHECK]:
+                self.table_data[i][COL_CHECK] = False
+                item = self.file_table.item(i, COL_CHECK)
+                if item:
+                    item.setCheckState(Qt.CheckState.Unchecked)
+
+        self.update_convert_button_state()
+
+    # Context menu and table operations
+    @Slot(QPoint)
+    def _show_file_table_context_menu(self, position: QPoint):
+        """Show context menu for the file table."""
+        if not self.file_table:
+            return
+        
+        menu = QMenu(self)
+        actions = [
+            ("Select all (visible/active)", self._on_table_select_all),
+            ("Clear selection in rows", self._on_table_clear_selection),
+            ("Remove selected rows", self._on_table_remove_selected),
+            (None, None),  # Separator
+            ("Clear all items from list", self.clear_input_list)
+        ]
+
+        for text, slot in actions:
+            if text is None:
+                menu.addSeparator()
+            else:
+                action = menu.addAction(text)
+                action.triggered.connect(slot)
+
+        menu.exec(self.file_table.mapToGlobal(position))
 
     @Slot()
+    def _on_table_select_all(self):
+        """Select all enabled items in the table."""
+        if not self.file_table:
+            return
+        
+        for i in range(len(self.table_data)):
+            item = self.file_table.item(i, COL_CHECK)
+            if item and item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                self.table_data[i][COL_CHECK] = True
+                item.setCheckState(Qt.CheckState.Checked)
+        
+        self.update_convert_button_state()
+
+    @Slot()
+    def _on_table_clear_selection(self):
+        """Clear selection for all items in the table."""
+        if not self.file_table:
+            return
+        
+        for i in range(len(self.table_data)):
+            self.table_data[i][COL_CHECK] = False
+            item = self.file_table.item(i, COL_CHECK)
+            if item:
+                item.setCheckState(Qt.CheckState.Unchecked)
+        
+        self.update_convert_button_state()
+
+    @Slot()
+    def _on_table_remove_selected(self):
+        """Remove selected items from the table."""
+        removed_count = 0
+        for i in range(len(self.table_data) - 1, -1, -1):
+            if self.table_data[i][COL_CHECK]:
+                del self.table_data[i]
+                removed_count += 1
+
+        if removed_count > 0:
+            self.update_table_widget()
+            if self.statusbar:
+                self.statusbar.showMessage(f"{removed_count} item(s) removed. {len(self.table_data)} remaining.")
+        
+        self.update_convert_button_state()
+
+    # Input/Output type selection methods
+    @Slot()
+    def _on_select_input_types_clicked(self):
+        """Show input type selection menu."""
+        if not self.selected_media_type_details:
+            if self.statusbar:
+                self.statusbar.showMessage("Please select a job and media type first.", 3000)
+            return
+
+        possible_input_exts = self.selected_media_type_details.get("input_ext", [])
+        if not possible_input_exts:
+            if self.statusbar:
+                self.statusbar.showMessage("No specific input types to filter for this selection.", 3000)
+            return
+
+        menu = QMenu(self)
+        for ext in sorted(possible_input_exts):
+            action = QAction(f".{ext}", self)
+            action.setCheckable(True)
+            action.setChecked(ext in self.active_input_filters)
+            action.toggled.connect(
+                lambda checked, current_ext=ext: self._on_input_filter_type_toggled(checked, current_ext))
+            menu.addAction(action)
+
+        if self.select_input_types_button:
+            button_pos = self.select_input_types_button.mapToGlobal(
+                QPoint(0, self.select_input_types_button.height()))
+            menu.exec(button_pos)
+
+    @Slot(bool, str)
+    def _on_input_filter_type_toggled(self, checked, extension):
+        """Handle input filter type toggle."""
+        if checked:
+            self.active_input_filters.add(extension)
+        else:
+            self.active_input_filters.discard(extension)
+
+        self._update_input_filter_display()
+        self._apply_filter_to_table()
+        self.update_convert_button_state()
+
+    def _update_input_filter_display(self):
+        """Update the input filter display label."""
+        active_filter_list = sorted(list(self.active_input_filters))
+        
+        if self.input_file_types_label:
+            if active_filter_list:
+                display_text = f"Input: {', '.join(['.' + ext for ext in active_filter_list])}"
+            elif self.selected_media_type_details:
+                all_media_exts = self.selected_media_type_details.get("input_ext", [])
+                display_text = f"Input: {', '.join(['.' + ext for ext in all_media_exts]) if all_media_exts else 'Any'}"
+            else:
+                display_text = "Input: N/A"
+            
+            self.input_file_types_label.setText(display_text)
+
+        if self.statusbar:
+            filter_text = ', '.join(active_filter_list) if active_filter_list else 'None (showing all for media type)'
+            self.statusbar.showMessage(f"Input filter updated. Active: {filter_text}", 3000)
+
+    @Slot()
+    def _on_select_output_type_clicked(self):
+        """Show output type selection menu."""
+        if not self.selected_media_type_details:
+            if self.statusbar:
+                self.statusbar.showMessage("Please select a media type first.", 3000)
+            return
+
+        possible_output_exts = self.selected_media_type_details.get("output_ext", [])
+        if not isinstance(possible_output_exts, list) or not possible_output_exts:
+            if self.statusbar:
+                self.statusbar.showMessage("No selectable output types for this media.", 3000)
+            return
+
+        menu = QMenu(self)
+        for ext_string in possible_output_exts:
+            if not ext_string:
+                continue
+            action = QAction(f".{ext_string}", self)
+            action.setCheckable(True)
+            action.setChecked(ext_string == self.selected_output_filter)
+            action.triggered.connect(
+                lambda checked=False, bound_ext=ext_string: self._on_output_filter_type_selected(bound_ext))
+            menu.addAction(action)
+
+        if self.select_output_type_button:
+            button_pos = self.select_output_type_button.mapToGlobal(
+                QPoint(0, self.select_output_type_button.height()))
+            menu.exec(button_pos)
+
+    @Slot(str)
+    def _on_output_filter_type_selected(self, extension):
+        """Handle output filter type selection."""
+        self.selected_output_filter = extension
+        if self.output_file_types_label:
+            self.output_file_types_label.setText(f"Output: .{extension}")
+        if self.statusbar:
+            self.statusbar.showMessage(f"Output type set to: .{extension}", 3000)
+        self.update_convert_button_state()
+
+    @Slot()
+    def _on_select_output_folder_clicked(self):
+        """Handle output folder selection."""
+        if not self.output_folder_path_display:
+            return
+        
+        current_path = self.output_folder_path_display.text() or os.path.expanduser("~")
+        folder = QFileDialog.getExistingDirectory(self.ui, "Select Output Folder", current_path)
+        
+        if folder:
+            self.output_folder_path_display.setText(os.path.normpath(folder))
+        
+        self.update_convert_button_state()
+
+    @Slot()
+    def update_convert_button_state(self):
+        """Update the convert button enabled state."""
+        if not self.main_action_button:
+            return
+
+        conditions = [
+            self._check_job_and_media_selected(),
+            self._check_output_type_ok(),
+            self._check_files_checked_and_active(),
+            self._check_output_folder_ok()
+        ]
+
+        self.main_action_button.setEnabled(all(conditions))
+
+    def _check_job_and_media_selected(self):
+        """Check if job and media type are selected."""
+        return bool(self.selected_media_type_details)
+
+    def _check_output_type_ok(self):
+        """Check if output type selection is valid."""
+        if not self.selected_media_type_details:
+            return True
+        
+        defined_output_exts = self.selected_media_type_details.get("output_ext", [])
+        return not defined_output_exts or bool(self.selected_output_filter)
+
+    def _check_files_checked_and_active(self):
+        """Check if there are checked and active files."""
+        if not self.file_table:
+            return False
+
+        current_filter_set = self.active_input_filters or (
+            set(self.selected_media_type_details.get("input_ext", [])) 
+            if self.selected_media_type_details else set())
+
+        for row_data in self.table_data:
+            if row_data[COL_CHECK]:
+                item_type = row_data[COL_TYPE].lower()
+                if (not self.selected_media_type_details or 
+                    not current_filter_set or 
+                    item_type in current_filter_set):
+                    return True
+        
+        return False
+
+    def _check_output_folder_ok(self):
+        """Check if output folder configuration is valid."""
+        if not (self.selected_media_type_details and 
+                self.selected_media_type_details.get("requires_output_folder", False)):
+            return True
+
+        if (self.output_same_folder_checkbox and 
+            not self.output_same_folder_checkbox.isChecked()):
+            return bool(self.output_folder_path_display and 
+                       self.output_folder_path_display.text())
+        
+        return True
+
+    # Conversion methods (continuing in next part due to length)
+    @Slot()
+    def start_conversion(self):
+        """Start the conversion process."""
+        if self.conversion_thread and self.conversion_thread.isRunning():
+            QMessageBox.warning(self, "Busy", "A conversion is already in progress.")
+            return
+
+        if not self._validate_conversion_setup():
+            return
+
+        selected_files_data = self._get_selected_files_for_conversion()
+        if not selected_files_data:
+            QMessageBox.warning(self, "No Files", 
+                              "No files selected for conversion (or none match current input filters).")
+            return
+
+        output_folder = self._validate_and_prepare_output_folder()
+        if output_folder is False:  # Explicit False means validation failed
+            return
+
+        self._start_conversion_thread(selected_files_data, output_folder)
+
+    def _validate_conversion_setup(self):
+        """Validate the conversion setup."""
+        if not self.selected_media_type_details:
+            QMessageBox.warning(self, "Setup Error", "Please select a valid job and media type.")
+            return False
+
+        job_output_ext_config = self.selected_media_type_details.get("output_ext", [])
+        if job_output_ext_config and not self.selected_output_filter:
+            QMessageBox.warning(self, "Setup Error", "Please select an output file type for this job.")
+            return False
+
+        return True
+
+    def _get_selected_files_for_conversion(self):
+        """Get the list of selected files for conversion."""
+        selected_files_data = []
+        current_active_input_exts = self.active_input_filters or set(
+            self.selected_media_type_details.get("input_ext", []))
+
+        for row_data in self.table_data:
+            if row_data[COL_CHECK]:
+                item_type = row_data[COL_TYPE].lower()
+                if (not self.selected_media_type_details or 
+                    not current_active_input_exts or 
+                    item_type in current_active_input_exts):
+                    selected_files_data.append(row_data)
+
+        return selected_files_data
+
+    def _validate_and_prepare_output_folder(self):
+        """Validate and prepare the output folder."""
+        output_folder = None
+        requires_output_folder = self.selected_media_type_details.get("requires_output_folder", False)
+
+        if (requires_output_folder and self.output_same_folder_checkbox and 
+            not self.output_same_folder_checkbox.isChecked()):
+            
+            if self.output_folder_path_display:
+                output_folder = self.output_folder_path_display.text().strip()
+            
+            if not output_folder:
+                QMessageBox.warning(self, "Output Folder Missing",
+                                  "Please select an output folder or choose 'Output in same folder'.")
+                return False
+
+            if not self._create_output_folder_if_needed(output_folder):
+                return False
+
+            if not self._check_disk_space(output_folder):
+                return False
+
+        return output_folder
+
+    def _create_output_folder_if_needed(self, output_folder):
+        """Create output folder if it doesn't exist."""
+        if not os.path.isdir(output_folder):
+            if not os.path.exists(output_folder):
+                try:
+                    os.makedirs(output_folder)
+                    if self.log_output_text:
+                        self.log_output_text.append(f"INFO: Created output directory: {output_folder}")
+                except Exception as e:
+                    QMessageBox.critical(self, "Output Folder Error", 
+                                       f"Could not create output folder: {output_folder}\nError: {e}")
+                    return False
+            else:
+                QMessageBox.critical(self, "Output Folder Error", 
+                                   f"Specified output path is not a directory: {output_folder}")
+                return False
+        return True
+
+    def _check_disk_space(self, output_folder):
+        """Check available disk space."""
+        estimated_min_gb = 0.1
+        free_space_gb = utils.get_free_disk_space_gb(output_folder)
+        
+        if free_space_gb is not None and free_space_gb < estimated_min_gb:
+            QMessageBox.critical(self, "Insufficient Disk Space",
+                               f"Output location '{output_folder}' has less than {estimated_min_gb:.1f}GB free "
+                               f"(approximately {free_space_gb:.2f}GB available). "
+                               f"Please select another location or free up space.")
+            return False
+        elif free_space_gb is None:
+            reply = QMessageBox.question(self, "Disk Space Unknown",
+                                       "Could not determine free disk space for the output location. Continue anyway?",
+                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                       QMessageBox.StandardButton.No)
+            return reply == QMessageBox.StandardButton.Yes
+        
+        return True
+
+    def _start_conversion_thread(self, selected_files_data, output_folder):
+        """Start the conversion worker thread."""
+        primary_out_ext, secondary_out_ext = self._get_output_extensions()
+        
+        total_files = len(selected_files_data)
+        selected_file_paths = [data[COL_PATH] for data in selected_files_data]
+        
+        current_overwrite_files = (self.overwrite_files_checkbox.isChecked() 
+                                 if self.overwrite_files_checkbox else False)
+
+        # Setup UI for conversion
+        self.set_ui_enabled_for_conversion(False)
+        self._setup_progress_ui(total_files)
+        self._setup_log_visibility()
+
+        # Create and start worker thread
+        self.conversion_thread = ConversionWorker(
+            selected_file_paths, self.selected_media_type_details,
+            output_folder, current_overwrite_files,
+            primary_out_ext, secondary_out_ext
+        )
+        
+        self._connect_worker_signals()
+        self.conversion_thread.start()
+
+    def _get_output_extensions(self):
+        """Get primary and secondary output extensions."""
+        primary_out_ext = self.selected_output_filter
+        secondary_out_ext = None
+
+        possible_primary_outputs = self.selected_media_type_details.get("output_ext", [])
+        possible_secondary_outputs = self.selected_media_type_details.get("output_ext_secondary")
+
+        if primary_out_ext and isinstance(possible_primary_outputs, list) and primary_out_ext in possible_primary_outputs:
+            idx = possible_primary_outputs.index(primary_out_ext)
+            if isinstance(possible_secondary_outputs, list) and idx < len(possible_secondary_outputs):
+                secondary_out_ext = possible_secondary_outputs[idx]
+            elif isinstance(possible_secondary_outputs, str) and idx == 0:
+                secondary_out_ext = possible_secondary_outputs
+
+        return primary_out_ext, secondary_out_ext
+
+    def _setup_progress_ui(self, total_files):
+        """Setup the progress UI for conversion."""
+        if self.progress_group_box:
+            self.progress_group_box.setVisible(True)
+
+        if self.overall_label:
+            self.overall_label.setText(f"Overall Progress (0/{total_files} files)")
+        
+        if self.overall_progress_bar:
+            self.overall_progress_bar.setMaximum(total_files * N_STAGES_PER_FILE)
+            self.overall_progress_bar.setValue(0)
+
+        if self.file_label:
+            self.file_label.setText("Current File: -")
+        
+        if self.file_progress_bar:
+            self.file_progress_bar.setRange(0, 100)
+            self.file_progress_bar.setValue(0)
+
+        for button in [self.overall_cancel_button, self.file_cancel_button]:
+            if button:
+                button.setEnabled(True)
+
+        action_button_text = self.main_action_button.text() if self.main_action_button else "Job"
+        if self.statusbar:
+            self.statusbar.showMessage(f"Starting '{action_button_text}' for {total_files} file(s)...")
+
+    def _setup_log_visibility(self):
+        """Setup log visibility for conversion."""
+        if self.log_output_text and not self.log_output_text.isVisible():
+            if self.toggle_log_button:
+                self.toggle_log_button.setChecked(True)
+        
+        if self.log_output_text:
+            self.log_output_text.clear()
+
+    def _connect_worker_signals(self):
+        """Connect worker thread signals."""
+        signal_connections = [
+            ('status_update', self.handle_overall_progress_update),
+            ('file_progress_update', self.handle_file_progress_update),
+            ('output_update', self.handle_output_update),
+            ('error_update', self.handle_error_update),
+            ('critical_error_occurred', self.handle_critical_error),
+            ('finished', self.handle_conversion_finished)
+        ]
+
+        for signal_name, slot in signal_connections:
+            getattr(self.conversion_thread, signal_name).connect(slot)
+
+    # Progress and completion handlers
+    @Slot(int, int, str)
+    def handle_overall_progress_update(self, current_step, total_steps, phase_description):
+        """Handle overall progress updates."""
+        if self.overall_progress_bar:
+            self.overall_progress_bar.setMaximum(total_steps)
+            self.overall_progress_bar.setValue(current_step)
+
+        parts = phase_description.split(': ', 1)
+        current_op_label = parts[0]
+        current_filename_display = parts[1] if len(parts) > 1 else ""
+
+        if self.overall_label:
+            self.overall_label.setText(f"Overall: {phase_description} ({current_step}/{total_steps} stages)")
+        
+        if self.statusbar:
+            self.statusbar.showMessage(f"Overall: {phase_description}")
+
+        self._update_file_progress_for_operation(current_op_label, current_filename_display)
+
+    def _update_file_progress_for_operation(self, operation, filename):
+        """Update file progress based on current operation."""
+        should_update_file_label = (
+            "Preparing" in operation or "Copying" in operation or
+            (self.file_label and (self.file_label.text() == "Current File: -" or
+                                (filename and filename not in self.file_label.text())))
+        )
+
+        if should_update_file_label and self.file_label:
+            self.file_label.setText(f"Current: {filename}")
+            if self.file_progress_bar:
+                self.file_progress_bar.setRange(0, 100)
+                self.file_progress_bar.setValue(0)
+
+        if self.file_progress_bar:
+            progress_map = {
+                "Preparing": 33,
+                "Copying": 33,
+                "Converting": 66,
+                "Finalizing": 100,
+                "File failed": 100,
+                "Interrupted": 100
+            }
+            
+            for key, value in progress_map.items():
+                if key in operation:
+                    self.file_progress_bar.setValue(value)
+                    break
+
+    @Slot(int)
+    def handle_file_progress_update(self, percentage):
+        """Handle file progress updates."""
+        if self.file_progress_bar and percentage == 100:
+            self.file_progress_bar.setValue(100)
+
+    @Slot(str)
+    def handle_critical_error(self, message):
+        """Handle critical errors."""
+        QMessageBox.critical(self, "Critical Conversion Error", message)
+        self.set_ui_enabled_for_conversion(True)
+        self.update_convert_button_state()
+        if self.progress_group_box:
+            self.progress_group_box.setVisible(False)
+
+    @Slot(int, int)
+    def handle_conversion_finished(self, success_count, fail_count):
+        """Handle conversion completion."""
+        total_attempted = success_count + fail_count
+        status_msg = f"Job finished. Success: {success_count}, Failed: {fail_count} (Total attempted: {total_attempted})."
+        
+        if self.statusbar:
+            self.statusbar.showMessage(status_msg)
+        
+        if self.log_output_text:
+            self.log_output_text.append(f"\n<b>{status_msg}</b>")
+
+        # Update progress bars to completion
+        if self.overall_progress_bar:
+            self.overall_progress_bar.setValue(self.overall_progress_bar.maximum())
+
+        if self.file_label:
+            self.file_label.setText("Finished.")
+        
+        if self.file_progress_bar:
+            self.file_progress_bar.setValue(100 if total_attempted > 0 else 0)
+
+        # Disable cancel buttons
+        for button in [self.overall_cancel_button, self.file_cancel_button]:
+            if button:
+                button.setEnabled(False)
+
+        # Re-enable UI and cleanup
+        self.set_ui_enabled_for_conversion(True)
+        self.conversion_thread = None
+        self.update_convert_button_state()
+
+    def set_ui_enabled_for_conversion(self, enabled):
+        """Set UI enabled state for conversion."""
+        # Widgets that should be disabled during conversion
+        widgets_to_disable = [
+            self.add_files_button, self.add_folder_button, self.recursive_checkbox,
+            self.file_table, self.job_type_combo, self.output_same_folder_checkbox,
+            self.delete_input_checkbox, self.overwrite_files_checkbox, self.actionSettings
+        ]
+
+        for widget in widgets_to_disable:
+            if widget:
+                widget.setEnabled(enabled)
+
+        if enabled:
+            self.update_ui_for_job_selection()
+            if self.progress_group_box:
+                self.progress_group_box.setVisible(False)
+            self.update_convert_button_state()
+        else:
+            # Disable additional widgets during conversion
+            conversion_disabled_widgets = [
+                self.media_type_combo, self.select_input_types_button,
+                self.select_output_type_button, self.output_folder_group_box,
+                self.main_action_button
+            ]
+            
+            for widget in conversion_disabled_widgets:
+                if widget:
+                    widget.setEnabled(False)
+
+            if self.progress_group_box:
+                self.progress_group_box.setVisible(True)
+            
+            for button in [self.overall_cancel_button, self.file_cancel_button]:
+                if button:
+                    button.setEnabled(True)
+
+    # Log and UI utility methods
+    @Slot(bool)
+    def toggle_log_visibility(self, checked):
+        """Toggle log visibility."""
+        if self.log_output_text:
+            self.log_output_text.setVisible(checked)
+        
+        if self.clear_log_button:
+            self.clear_log_button.setVisible(checked)
+        
+        if self.toggle_log_button:
+            self.toggle_log_button.setText("Hide Log ▲" if checked else "Show Log ▼")
+
+    @Slot()
+    def clear_log(self):
+        """Clear the log text."""
+        if self.log_output_text:
+            self.log_output_text.clear()
+
+    @Slot(str)
+    def handle_output_update(self, message):
+        """Handle output log updates."""
+        if self.log_output_text:
+            self.log_output_text.append(message)
+
+    @Slot(str)
+    def handle_error_update(self, message):
+        """Handle error log updates."""
+        if self.log_output_text:
+            self.log_output_text.append(f"<font color='red'>{message}</font>")
+
+    @Slot()
+    def open_settings(self):
+        """Open the settings dialog."""
+        dialog = SettingsDialog(self.ui)
+        if dialog.exec():
+            if self.statusbar:
+                self.statusbar.showMessage("Settings updated and saved.")
+            if self.delete_input_checkbox:
+                self.delete_input_checkbox.setChecked(config.settings.DELETE_SOURCE_ON_SUCCESS)
+        else:
+            if self.statusbar:
+                self.statusbar.showMessage("Settings dialog cancelled.")
+
+    # Application lifecycle methods
+    @Slot()
     def close_application(self):
+        """Close the application."""
         print("DEBUG: close_application() called (e.g., from File > Exit).")
         self.close()
 
     def closeEvent(self, event: QCloseEvent):
+        """Handle window close event."""
         print("DEBUG: ConverterWindow.closeEvent() triggered.")
         app = QApplication.instance()
 
         if self.conversion_thread and self.conversion_thread.isRunning():
             reply = QMessageBox.question(
-                self,
-                'Confirm Exit',
+                self, 'Confirm Exit',
                 "A job is currently running. Are you sure you want to exit?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
+            
             if reply == QMessageBox.StandardButton.Yes:
                 print("DEBUG: User confirmed exit during active conversion.")
-                self._ensure_thread_stopped()  # Use the new method
+                self._ensure_thread_stopped()
                 event.accept()
                 if app:
-                    print(
-                        "DEBUG: Calling app.quit() from closeEvent (conversion was active).")
+                    print("DEBUG: Calling app.quit() from closeEvent (conversion was active).")
                     app.quit()
             else:
                 print("DEBUG: User cancelled exit during active conversion.")
@@ -1506,19 +1666,20 @@ class ConverterWindow(QMainWindow):
                 app.quit()
 
     def eventFilter(self, watched_object, event):
+        """Handle drag and drop events."""
         if watched_object is self.file_table:
             if event.type() == QEvent.Type.DragEnter:
-                # Assuming event is QDragEnterEvent, which it should be for this type
                 if event.mimeData().hasUrls():
-                    if self.statusbar: self.statusbar.showMessage("Drop files/folders onto the table...", 2000)
+                    if self.statusbar:
+                        self.statusbar.showMessage("Drop files/folders onto the table...", 2000)
                     event.acceptProposedAction()
                 else:
-                    if self.statusbar: self.statusbar.showMessage("Drop ignored: Only files/folders accepted.", 2000)
+                    if self.statusbar:
+                        self.statusbar.showMessage("Drop ignored: Only files/folders accepted.", 2000)
                     event.ignore()
-                return True  # Event handled
+                return True
 
             elif event.type() == QEvent.Type.Drop:
-                # Assuming event is QDropEvent
                 paths = []
                 if event.mimeData().hasUrls():
                     for url in event.mimeData().urls():
@@ -1528,33 +1689,31 @@ class ConverterWindow(QMainWindow):
                 if paths:
                     self.process_added_paths(paths)
                     event.acceptProposedAction()
-                    if self.statusbar: self.statusbar.showMessage(f"{len(paths)} item(s) dropped.", 2000)
+                    if self.statusbar:
+                        self.statusbar.showMessage(f"{len(paths)} item(s) dropped.", 2000)
                 else:
                     event.ignore()
-                return True  # Event handled
+                return True
 
-        # Pass on other events or events for other objects
         return super().eventFilter(watched_object, event)
 
 
 def run_gui():
+    """Run the GUI application."""
     print("DEBUG: Initializing QApplication in gui_main_window.run_gui()...")
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(True)
 
-    icon_path = os.path.join(os.path.dirname(
-        __file__), "assets", "icons", "app_icon.ico")
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))
-        print(f"DEBUG: Application icon set from {icon_path}")
+    # Set application icon
+    if os.path.exists(ICON_PATH):
+        app.setWindowIcon(QIcon(ICON_PATH))
+        print(f"DEBUG: Application icon set from {ICON_PATH}")
     else:
-        print(
-            f"DEBUG: Application icon not found at {icon_path}. Using default system icon.")
+        print(f"DEBUG: Application icon not found at {ICON_PATH}. Using default system icon.")
 
-    print(
-        f"DEBUG (gui_main_window): Config SUBPROCESS_TIMEOUT: {config.settings.SUBPROCESS_TIMEOUT}")
+    print(f"DEBUG (gui_main_window): Config SUBPROCESS_TIMEOUT: {config.settings.SUBPROCESS_TIMEOUT}")
 
     print("DEBUG: Creating ConverterWindow instance...")
     window_wrapper = ConverterWindow()
@@ -1565,21 +1724,19 @@ def run_gui():
 
         print("DEBUG: Entering Qt event loop (app.exec())...")
         exit_code = app.exec()
-        print(
-            f"DEBUG: Qt event loop finished. app.exec() returned: {exit_code}")
+        print(f"DEBUG: Qt event loop finished. app.exec() returned: {exit_code}")
 
+        # Debug thread information
         active_threads = threading.enumerate()
-        print(
-            f"DEBUG: Active threads before sys.exit() ({len(active_threads)}):")
+        print(f"DEBUG: Active threads before sys.exit() ({len(active_threads)}):")
         for thread_item in active_threads:
-            print(
-                f"  - Name: {thread_item.name}, Daemon: {thread_item.daemon}, Alive: {thread_item.is_alive()}")
-            if thread_item != threading.main_thread() and thread_item.is_alive() and not thread_item.daemon:
-                print(
-                    f"WARNING: Non-daemon thread '{thread_item.name}' is still alive. Python might hang if not handled.")
+            print(f"  - Name: {thread_item.name}, Daemon: {thread_item.daemon}, Alive: {thread_item.is_alive()}")
+            if (thread_item != threading.main_thread() and 
+                thread_item.is_alive() and not thread_item.daemon):
+                print(f"WARNING: Non-daemon thread '{thread_item.name}' is still alive. "
+                     f"Python might hang if not handled.")
 
-        print(
-            f"DEBUG: Calling sys.exit({exit_code}). Python process should terminate if all non-daemon threads are done.")
+        print(f"DEBUG: Calling sys.exit({exit_code}). Python process should terminate if all non-daemon threads are done.")
         sys.exit(exit_code)
     else:
         print("DEBUG: Exiting due to UI load failure in ConverterWindow initialization.")
