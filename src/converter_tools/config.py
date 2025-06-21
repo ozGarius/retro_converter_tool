@@ -16,9 +16,9 @@ def get_default_temp_dir():
     """Returns a default temporary directory based on the OS."""
     if platform.system() == "Windows":
         base_temp = r"C:\TEMP"
-        oz_converter_temp = os.path.join(base_temp, "OzConverter")
+        oz_converter_temp = os.path.join(base_temp, "RetroConverterTool") # Changed OzConverter
         try:
-            # Attempt to create C:\TEMP\OzConverter
+            # Attempt to create C:\TEMP\RetroConverterTool
             # os.makedirs will create parent directories if they don't exist (C:\TEMP in this case)
             # if exist_ok=True is used. However, creating C:\TEMP might require admin rights
             # if C:\ is protected. It's often better to let users manage C:\TEMP or use user-specific temp.
@@ -28,11 +28,11 @@ def get_default_temp_dir():
         except Exception as e:
             print(
                 f"Warning: Could not create or access {oz_converter_temp} (Error: {e}). Falling back to system temp.")
-            fallback_dir = os.path.join(tempfile.gettempdir(), "OzConverter")
+            fallback_dir = os.path.join(tempfile.gettempdir(), "RetroConverterTool") # Changed OzConverter
             os.makedirs(fallback_dir, exist_ok=True)
             return fallback_dir
     else:  # For Linux/macOS
-        oz_converter_temp = os.path.join(tempfile.gettempdir(), "OzConverter")
+        oz_converter_temp = os.path.join(tempfile.gettempdir(), "RetroConverterTool") # Changed OzConverter
         os.makedirs(oz_converter_temp, exist_ok=True)  # Ensure it exists
         return oz_converter_temp
 

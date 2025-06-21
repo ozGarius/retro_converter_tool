@@ -34,15 +34,16 @@ except ImportError as e:
     sys.exit(1)
 
 # Core application modules
-from . import config
-from . import utils
-from . import conversions
-from . import menu_definitions
+from src.converter_tools import config
+from src.converter_tools.config import save_app_settings
+from src.converter_tools import utils
+from src.converter_tools import conversions
+from src.converter_tools import menu_definitions
 
 # GUI components from other files in this package
-from .gui_settings import SettingsDialog
-from .gui_worker import ConversionWorker, N_STAGES_PER_FILE
-from .gui_m3u_creator import M3UCreatorWindow
+from src.converter_tools.gui_settings import SettingsDialog
+from src.converter_tools.gui_worker import ConversionWorker, N_STAGES_PER_FILE
+from src.converter_tools.gui_m3u_creator import M3UCreatorWindow
 
 # Constants for table columns
 COL_CHECK = 0
@@ -275,51 +276,133 @@ class ConverterWindow(QMainWindow):
         # --- Initial UI Setup ---
         self._populate_job_types()
         if self.delete_input_checkbox:
-            self.delete_input_checkbox.setChecked(
-                config.settings.DELETE_SOURCE_ON_SUCCESS)
+            self.delete_input_checkbox.setChecked(config.settings.DELETE_SOURCE_ON_SUCCESS)
         if self.output_same_folder_checkbox:
-            self._on_output_same_folder_toggled(
-                self.output_same_folder_checkbox.isChecked())
+            self._on_output_same_folder_toggled(self.output_same_folder_checkbox.isChecked())
 
         self.update_ui_for_job_selection()
         if self.statusbar:
-            self.statusbar.showMessage("Ready. Select a job type to begin.")
+            self.statusbar.showMessage(
+                f"Ready. Max Concurrent Jobs: {config.settings.CONCURRENT_JOBS}. Select a job type to begin."
+            )
 
-        # --- Begin M3U Creator Integration ---
-        if hasattr(self, 'ui') and self.ui is not None and hasattr(self.ui, 'menuBar'):
-            main_menubar = self.ui.menuBar()  # Use self.ui.menuBar()
+        # Initialize menu system
+        self._setup_menu_system()
+        self.ui.setWindowTitle("Retro Converter Tool")
 
-            tools_menu = None
-            # Iterate through existing top-level menu actions to find "Tools" menu
-            for action_iter_menu_find in main_menubar.actions():  # Renamed loop variable for clarity
-                menu_candidate = action_iter_menu_find.menu()
-                if menu_candidate and menu_candidate.title() == "&Tools":
-                    tools_menu = menu_candidate
-                    break
 
-            if tools_menu is None:  # If not found, create it
-                tools_menu = main_menubar.addMenu("&Tools")
+    def _setup_menu_system(self):
+        """Initialize all menus and menu items."""
+        menubar = self._get_or_create_menubar()
 
-            # Create and add the M3U Creator action
-            # Parent action to self.ui (the main QMainWindow object from .ui file)
-            self.actionM3UPlaylistCreator = QAction(
-                "M3U Playlist Creator...", self.ui)
-            self.actionM3UPlaylistCreator.setObjectName(
-                "actionM3UPlaylistCreator")
-            self.actionM3UPlaylistCreator.triggered.connect(
-                self._open_m3u_creator)
-            tools_menu.addAction(self.actionM3UPlaylistCreator)
+        self._setup_jobs_menu(menubar)
+        self._setup_m3u_creator_menu(menubar)
+        self._setup_help_menu(menubar)
+
+
+    def _get_or_create_menubar(self):
+        """Get existing menubar or create a new one."""
+        menubar = self.ui.menuBar()
+        if not menubar:
+            menubar = QMenuBar(self.ui)
+            if isinstance(self.ui, QMainWindow):
+                self.ui.setMenuBar(menubar)
+            elif hasattr(self, 'setMenuBar'):
+                self.setMenuBar(menubar)
+        return menubar
+
+
+    def _find_menu_by_title(self, menubar, title):
+        """Find an existing menu by its title."""
+        for action in menubar.actions():
+            menu = action.menu()
+            if menu and menu.title() == title:
+                return menu
+        return None
+
+
+    def _setup_m3u_creator_menu(self, menubar):
+        """Set up the M3U Creator menu item."""
+        if not (hasattr(self, 'ui') and self.ui and hasattr(self.ui, 'menuBar')):
+            self._log_warning("Could not find menuBar on self.ui to add Tools menu for M3U Creator.")
+            return
+
+        # Find or create Tools menu
+        tools_menu = self._find_menu_by_title(menubar, "&Tools")
+        if not tools_menu:
+            tools_menu = menubar.addMenu("&Tools")
+
+        # Create M3U Creator action
+        self.actionM3UPlaylistCreator = QAction("M3U Playlist Creator...", self.ui)
+        self.actionM3UPlaylistCreator.setObjectName("actionM3UPlaylistCreator")
+        self.actionM3UPlaylistCreator.triggered.connect(self._open_m3u_creator)
+        tools_menu.addAction(self.actionM3UPlaylistCreator)
+
+
+    def _setup_jobs_menu(self, menubar):
+        """Set up the Jobs menu with concurrent jobs submenu."""
+        self.jobs_menu = QMenu("&Jobs", self.ui)
+        self.concurrent_job_actions = []
+        
+        # Create concurrent jobs submenu
+        concurrent_jobs_menu = QMenu("Concurrent Jobs", self.ui)
+        max_jobs_options = self._get_max_jobs_range()
+        
+        for job_count in max_jobs_options:
+            action = QAction(
+                f"{job_count} Job{'s' if job_count > 1 else ''}", 
+                concurrent_jobs_menu, 
+                checkable=True
+            )
+            action.setData(job_count)
+            action.triggered.connect(self._handle_concurrent_jobs_changed)
+            concurrent_jobs_menu.addAction(action)
+            self.concurrent_job_actions.append(action)
+            
+            if job_count == config.settings.CONCURRENT_JOBS:
+                action.setChecked(True)
+
+        self.jobs_menu.addMenu(concurrent_jobs_menu)
+        
+        # Insert before Help menu if it exists, otherwise append
+        help_menu_action = self._find_menu_action_by_title(menubar, "&Help")
+        if help_menu_action:
+            menubar.insertMenu(help_menu_action, self.jobs_menu)
         else:
-            # This else block is for debugging if the menu bar isn't found as expected.
-            if hasattr(self, 'log_output_text') and self.log_output_text:
-                self.log_output_text.append(
-                    "<font color='orange'>Warning: Could not find menuBar on self.ui to add Tools menu for M3U Creator.</font>")
-            else:
-                print(
-                    "DEBUG: Could not find menuBar on self.ui to add Tools menu for M3U Creator.", file=sys.stderr)
-        # --- End M3U Creator Integration ---
+            menubar.addMenu(self.jobs_menu)
 
-        self.ui.setWindowTitle("Converter Tool")
+
+    def _setup_help_menu(self, menubar):
+        """Set up the Help menu."""
+        self.help_menu = QMenu("&Help", self.ui)
+        self.actionAbout = QAction("&About", self.ui)
+        self.actionAbout.triggered.connect(self.show_about_dialog)
+        self.help_menu.addAction(self.actionAbout)
+        menubar.addMenu(self.help_menu)
+
+
+    def _get_max_jobs_range(self):
+        """Get the range of available concurrent job options."""
+        cpu_count = os.cpu_count() or 4
+        max_jobs = min(cpu_count + 1, 11)  # Cap at 10 concurrent jobs
+        return range(1, max_jobs)
+
+
+    def _find_menu_action_by_title(self, menubar, title):
+        """Find a menu action by its menu title."""
+        for action in menubar.actions():
+            menu = action.menu()
+            if menu and menu.title() == title:
+                return action
+        return None
+
+
+    def _log_warning(self, message):
+        """Log a warning message using available logging mechanism."""
+        if hasattr(self, 'log_output_text') and self.log_output_text:
+            self.log_output_text.append(f"<font color='orange'>Warning: {message}</font>")
+        else:
+            print(f"DEBUG: {message}", file=sys.stderr)
 
     @Slot()
     def _open_m3u_creator(self):
@@ -347,6 +430,92 @@ class ConverterWindow(QMainWindow):
                 parent_for_msgbox = None
             QMessageBox.critical(
                 parent_for_msgbox, "M3U Creator Error", error_message)
+
+    @Slot()
+    def show_about_dialog(self):
+        app_name = "Retro Converter Tool" # Verified
+        version = "1.1.0" # This might need to be dynamic later
+        copyright_text = "(c) 2023-2024 ozGarius" # Corrected copyright name
+
+        # NOTE: The following lines related to README parsing are intentionally removed:
+        # base_path = os.path.dirname(__file__)
+        # project_root = os.path.dirname(os.path.dirname(base_path))
+        # readme_file_path = os.path.join(project_root, "README.md")
+        # readme_file_path = os.path.normpath(readme_file_path)
+        # readme_data = utils.extract_readme_sections(readme_path=readme_file_path)
+        # tools_used_from_readme = readme_data.get("tools_and_libraries", "Could not load from README.md")
+        # licenses_from_readme = readme_data.get("third_party_licenses", "Could not load from README.md")
+
+        # Hardcoded strings for tools/libraries and licenses
+        tools_used_text = (
+            "- Python 3.x<br>"
+            "- PySide6 (for the GUI)<br>"
+            "- send2trash (for safe deletion)<br>"
+            "- 7-Zip (as 7za.exe, for archive handling)<br>"
+            "- DolphinTool.exe (for Nintendo Wii/GC formats)<br>"
+            "- chdman.exe (for MAME CHDs)<br>"
+            "- maxcso.exe (for CSO compression)"
+        )
+
+        licenses_text = (
+            "- PySide6: LGPL v3<br>"
+            "- send2trash: BSD License<br>"
+            "- 7-Zip (7za.exe): GNU LGPL + unRAR restriction<br>"
+            "- DolphinTool.exe: GPLv2+<br>"
+            "- chdman.exe: GPL-2.0+ (MAME specifics)<br>"
+            "- maxcso.exe: MIT License"
+        )
+
+        about_text = (
+            f"<h2>{app_name}</h2>"
+            f"<p><b>Version:</b> {version}</p>"
+            f"<p><b>Copyright:</b> {copyright_text}</p>"
+            f"<p>A tool for converting and managing media files.</p>"
+            f"<hr>"
+            f"<p><b>Python Version:</b><br>{sys.version.split()[0]}</p>"
+            f"<hr>"
+            f"<p><b>Tools and Libraries Used:</b><br>{tools_used_text}</p>"
+            f"<hr>"
+            f"<p><b>Third-Party Licenses:</b><br>{licenses_text}</p>"
+            f"<hr>"
+            f"<p><b>GitHub Repository:</b> <a href='https://github.com/ozGarius/retro_converter_tool'>retro_converter_tool on GitHub</a></p>" # Corrected GitHub URL
+        )
+
+        msg_box = QMessageBox(self.ui if self.ui else self) # Use self.ui as parent
+        msg_box.setWindowTitle(f"About {app_name}")
+        msg_box.setTextFormat(Qt.TextFormat.RichText)
+        msg_box.setText(about_text)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        # Allow text selection and link interaction
+        msg_box.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        msg_box.exec()
+
+    @Slot() # Changed signature if using self.sender()
+    def _handle_concurrent_jobs_changed(self):
+        triggered_action = self.sender()
+        if not isinstance(triggered_action, QAction):
+            if utils.APP_LOGGER:
+                utils.APP_LOGGER.warning(f"_handle_concurrent_jobs_changed called by non-QAction sender: {type(triggered_action)}")
+            return
+
+        num_jobs = triggered_action.data()
+
+        if isinstance(num_jobs, int) and num_jobs > 0:
+            config.settings.CONCURRENT_JOBS = num_jobs
+            save_app_settings()
+            if self.statusbar:
+                self.statusbar.showMessage(f"Max concurrent jobs set to {num_jobs}.")
+
+            for act in self.concurrent_job_actions:
+                if act is not triggered_action:
+                    act.setChecked(False)
+
+            if not triggered_action.isChecked():
+                triggered_action.setChecked(True)
+        else:
+            if utils.APP_LOGGER:
+                utils.APP_LOGGER.error(f"Invalid data for concurrent jobs action: {triggered_action.data() if triggered_action else 'Unknown'}")
 
     def _ensure_thread_stopped(self):
         """Ensures the conversion thread is properly stopped."""

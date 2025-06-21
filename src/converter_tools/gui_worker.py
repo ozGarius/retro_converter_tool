@@ -8,8 +8,8 @@ except ImportError as e:
     print(f"FATAL ERROR (gui_worker.py): PySide6.QtCore not found. {e}")
     raise
 
-import utils
-import conversions
+from src.converter_tools import utils # Changed to absolute import
+from src.converter_tools import conversions # Changed to absolute import
 
 # Number of distinct stages reported by utils.process_file for progress tracking.
 N_STAGES_PER_FILE = 3

@@ -7,7 +7,7 @@ import os
 try:
     # This import is primarily for type hinting or if we later want to
     # store actual function references directly, though getattr() is safer for loose coupling.
-    import conversions
+    from src.converter_tools import conversions # Changed to absolute import
 except ImportError:
     print("ERROR: menu_definitions.py could not import conversions.py (this might be okay if only names are used)")
     pass  # Allow to proceed if only function names are stored

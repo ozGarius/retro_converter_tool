@@ -7,7 +7,8 @@ import shutil
 import glob
 import time
 import tempfile
-import config
+
+from src.converter_tools import config
 import re
 
 try:
@@ -568,13 +569,13 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
 
     # *** ADDED PAUSE FOR DEBUGGING ***
     # if output_signal is None: # Assuming CLI mode if no output_signal
-    # _emit_or_print(
+    # emit_or_print(
     #     f"\n--- PAUSED FOR DEBUGGING (process_file after conversion_func for '{file_name_base_with_ext}') ---", fallback_color_code="magenta")
-    # _emit_or_print(
+    # emit_or_print(
     #     f"Conversion successful reported by function: {conversion_successful}", fallback_color_code="magenta")
-    # _emit_or_print(
+    # emit_or_print(
     #     f"Temp directory is: {temp_path_for_this_file}", fallback_color_code="magenta")
-    # _emit_or_print("You can now inspect the temp directory.",
+    # emit_or_print("You can now inspect the temp directory.",
     #                fallback_color_code="magenta")
     # input("Press Enter to continue...")
     # *** END OF ADDED PAUSE ***

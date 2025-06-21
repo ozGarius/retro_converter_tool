@@ -8,6 +8,17 @@ import os
 import sys
 
 try:
+    from src.converter_tools import config
+    from src.converter_tools.config import save_app_settings
+    from src.converter_tools import utils
+    from src.converter_tools import conversions
+    from src.converter_tools import menu_definitions
+except ImportError: # Fallback for direct script run or different structure
+    # This block is tricky. If the primary 'src.converter_tools' fails,
+    # it implies 'src' is not being treated as a package root relative to project root in sys.path.
+    # The original non-relative fallbacks might work if 'converter_tools' itself is in sys.path (e.g. when running from 'src').
+    # For now, keeping the original fallbacks as they were, as changing them to 'src.converter_tools'
+    # would make this except block redundant if the try block fails due to 'src' not being found.
     import config
     import utils
     import conversions
@@ -66,9 +77,9 @@ def run_cli(input_path_from_args=None):
 
     while True:
         os.system('cls' if os.name == 'nt' else 'clear')
-        utils.emit_or_print("=================================================", fallback_color_code="\033[96m")
-        utils.emit_or_print(">> Converter Tool - Command Line Interface     <<", fallback_color_code="\033[96m")
-        utils.emit_or_print("=================================================", fallback_color_code="\033[96m")
+        utils._emit_or_print("=================================================", fallback_color_code="\033[96m")
+        utils._emit_or_print(">> Retro Converter Tool - Command Line Interface <<", fallback_color_code="\033[96m")
+        utils._emit_or_print("=================================================", fallback_color_code="\033[96m")
 
         # 1. Choose Job Type
         job_names = [job["job_name"] for job in menu_definitions.JOB_DEFINITIONS]

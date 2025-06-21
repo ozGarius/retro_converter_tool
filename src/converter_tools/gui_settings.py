@@ -19,7 +19,7 @@ except ImportError as e:
         print(f"FATAL ERROR (gui_settings.py): PySide6 not found, and QMessageBox fallback failed. {e}")
     raise 
 
-import config
+from src.converter_tools import config # Changed to absolute import
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
