@@ -16,8 +16,9 @@ try:
         QFileDialog, QMessageBox, QStatusBar, QDialog, QDialogButtonBox,
         QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar
     )
-    from PySide6.QtGui import QAction, QKeySequence, QColor, QPalette, QCloseEvent, QIcon
-    from PySide6.QtCore import Qt, Slot, Signal, QPoint
+    from PySide6.QtGui import (QAction, QKeySequence, QColor, QPalette,
+                               QCloseEvent, QIcon, QDropEvent)
+    from PySide6.QtCore import Qt, Slot, Signal, QPoint, QMimeData, QEvent
     from PySide6.QtUiTools import QUiLoader
 except ImportError as e:
     try:
@@ -170,6 +171,22 @@ class ConverterWindow(QMainWindow):
                 else:
                     sys.exit(-1)
                 return
+
+        # Ensure previous attempts are cleared for drag/drop
+        self.setAcceptDrops(False)
+        if hasattr(self.ui, 'setAcceptDrops'): # self.ui is the base QWidget loaded from .ui
+            self.ui.setAcceptDrops(False)
+        central_w = self.centralWidget() # QMainWindow's central widget
+        if central_w and hasattr(central_w, 'setAcceptDrops'):
+            central_w.setAcceptDrops(False)
+
+        # Now, specifically enable it for file_table and install filter
+        if self.file_table:
+            self.file_table.setAcceptDrops(True) # Make file_table accept drops
+            self.file_table.installEventFilter(self) # Make ConverterWindow handle its events
+        else:
+            # This case should ideally not happen if UI is loaded correctly
+            pass # self.file_table was not found, already logged during widget finding if critical
 
         # --- Initialize UI States ---
         if self.progress_group_box:
@@ -1318,6 +1335,37 @@ class ConverterWindow(QMainWindow):
             if app:
                 print("DEBUG: Calling app.quit() from closeEvent (no conversion).")
                 app.quit()
+
+    def eventFilter(self, watched_object, event):
+        if watched_object is self.file_table:
+            if event.type() == QEvent.Type.DragEnter:
+                # Assuming event is QDragEnterEvent, which it should be for this type
+                if event.mimeData().hasUrls():
+                    if self.statusbar: self.statusbar.showMessage("Drop files/folders onto the table...", 2000)
+                    event.acceptProposedAction()
+                else:
+                    if self.statusbar: self.statusbar.showMessage("Drop ignored: Only files/folders accepted.", 2000)
+                    event.ignore()
+                return True  # Event handled
+
+            elif event.type() == QEvent.Type.Drop:
+                # Assuming event is QDropEvent
+                paths = []
+                if event.mimeData().hasUrls():
+                    for url in event.mimeData().urls():
+                        if url.isLocalFile():
+                            paths.append(url.toLocalFile())
+
+                if paths:
+                    self.process_added_paths(paths)
+                    event.acceptProposedAction()
+                    if self.statusbar: self.statusbar.showMessage(f"{len(paths)} item(s) dropped.", 2000)
+                else:
+                    event.ignore()
+                return True  # Event handled
+
+        # Pass on other events or events for other objects
+        return super().eventFilter(watched_object, event)
 
 
 def run_gui():
