@@ -162,13 +162,11 @@ class ConverterWindow(QMainWindow):
 
         # Now, specifically enable it for file_table and install filter
         if self.file_table:
-            print("DEBUG: Setting acceptDrops(True) ONLY on self.file_table")
             self.file_table.setAcceptDrops(True) # Make file_table accept drops
             self.file_table.installEventFilter(self) # Make ConverterWindow handle its events
-            print("DEBUG: Installed event filter on self.file_table")
         else:
             # This case should ideally not happen if UI is loaded correctly
-            print("DEBUG: self.file_table not found. Cannot set acceptDrops for drag/drop on file_table.")
+            pass # self.file_table was not found, already logged during widget finding if critical
 
         # --- Initialize UI States ---
         if self.progress_group_box:
@@ -1256,60 +1254,19 @@ class ConverterWindow(QMainWindow):
                 print("DEBUG: Calling app.quit() from closeEvent (no conversion).")
                 app.quit()
 
-    # Original dragEnterEvent - logic moved to eventFilter for file_table
-    # def dragEnterEvent(self, event):
-    #     """Handles drag enter events to accept only file/folder drops."""
-    #     print("DEBUG: dragEnterEvent triggered")
-    #     if event.mimeData().hasUrls():
-    #         print("DEBUG: dragEnterEvent: Accepting - URLs found")
-    #         if self.statusbar: self.statusbar.showMessage("Drop files or folders here...", 2000)
-    #         event.acceptProposedAction()
-    #     else:
-    #         print("DEBUG: dragEnterEvent: Ignoring - No URLs")
-    #         if self.statusbar: self.statusbar.showMessage("Drag ignored: No URLs found.", 2000)
-    #         event.ignore()
-    #     # print("DEBUG: dragEnterEvent: Forcing acceptProposedAction() for debugging")
-    #     # if self.statusbar: self.statusbar.showMessage("Drag detected (debug mode)", 2000)
-    #     # event.acceptProposedAction()
-
-    # Original dropEvent - logic moved to eventFilter for file_table
-    # def dropEvent(self, event):
-    #     """Handles drop events to process dropped files/folders."""
-    #     print("DEBUG: dropEvent triggered")
-    #     paths = []
-    #     if event.mimeData().hasUrls():
-    #         for url in event.mimeData().urls():
-    #             if url.isLocalFile():
-    #                 paths.append(url.toLocalFile())
-    #
-    #     if paths:
-    #         print(f"DEBUG: dropEvent: Processing {len(paths)} paths")
-    #         self.process_added_paths(paths)
-    #         event.acceptProposedAction()
-    #         # Statusbar message is handled by process_added_paths
-    #     else:
-    #         print("DEBUG: dropEvent: No local files to process")
-    #         event.ignore()
-    #         if self.statusbar:
-    #             self.statusbar.showMessage("Drop ignored: No valid local files or folders found.", 2000)
-
     def eventFilter(self, watched_object, event):
         if watched_object is self.file_table:
             if event.type() == QEvent.Type.DragEnter:
-                print("DEBUG: eventFilter: DragEnter event on file_table")
                 # Assuming event is QDragEnterEvent, which it should be for this type
                 if event.mimeData().hasUrls():
-                    print("DEBUG: eventFilter: Accepting DragEnter - URLs found")
                     if self.statusbar: self.statusbar.showMessage("Drop files/folders onto the table...", 2000)
                     event.acceptProposedAction()
                 else:
-                    print("DEBUG: eventFilter: Ignoring DragEnter - No URLs")
                     if self.statusbar: self.statusbar.showMessage("Drop ignored: Only files/folders accepted.", 2000)
                     event.ignore()
                 return True  # Event handled
 
             elif event.type() == QEvent.Type.Drop:
-                print("DEBUG: eventFilter: Drop event on file_table")
                 # Assuming event is QDropEvent
                 paths = []
                 if event.mimeData().hasUrls():
@@ -1318,12 +1275,10 @@ class ConverterWindow(QMainWindow):
                             paths.append(url.toLocalFile())
 
                 if paths:
-                    print(f"DEBUG: eventFilter: Processing {len(paths)} paths from drop")
                     self.process_added_paths(paths)
                     event.acceptProposedAction()
                     if self.statusbar: self.statusbar.showMessage(f"{len(paths)} item(s) dropped.", 2000)
                 else:
-                    print("DEBUG: eventFilter: No local files in drop event")
                     event.ignore()
                 return True  # Event handled
 
