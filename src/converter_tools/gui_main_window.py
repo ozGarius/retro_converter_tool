@@ -88,22 +88,6 @@ class ConverterWindow(QMainWindow):
 
         self.ui.setAttribute(Qt.WA_DeleteOnClose, True)
 
-        # Ensure previous attempts are cleared
-        self.setAcceptDrops(False)
-        if hasattr(self.ui, 'setAcceptDrops'):
-            self.ui.setAcceptDrops(False)
-
-        central_w = self.centralWidget()
-        if central_w:
-            print("DEBUG: Setting acceptDrops on centralWidget")
-            central_w.setAcceptDrops(True)
-        elif hasattr(self.ui, 'setAcceptDrops'):
-            print("DEBUG: No central widget, setting acceptDrops on self.ui")
-            self.ui.setAcceptDrops(True)
-        else:
-            print("DEBUG: No central widget and self.ui does not support acceptDrops. Falling back to self (QMainWindow)")
-            self.setAcceptDrops(True)
-
         # --- Find UI Elements ---
         self.job_type_combo = self.ui.findChild(QComboBox, "job_type_combo")
         self.media_type_combo = self.ui.findChild(QComboBox, "media_type_combo")
@@ -167,6 +151,21 @@ class ConverterWindow(QMainWindow):
                 else:
                     sys.exit(-1)
                 return
+
+        # Ensure previous attempts are cleared for drag/drop
+        self.setAcceptDrops(False)
+        if hasattr(self.ui, 'setAcceptDrops'):
+            self.ui.setAcceptDrops(False)
+        central_w = self.centralWidget()
+        if central_w and hasattr(central_w, 'setAcceptDrops'): # Check hasattr for central_w too
+            central_w.setAcceptDrops(False)
+
+        if self.file_table:
+            print("DEBUG: Setting acceptDrops(True) on self.file_table")
+            self.file_table.setAcceptDrops(True)
+        else:
+            print("DEBUG: self.file_table not found, falling back to setting acceptDrops(True) on self (QMainWindow)")
+            self.setAcceptDrops(True) # Fallback if file_table isn't found for some reason
 
         # --- Initialize UI States ---
         if self.progress_group_box:
@@ -1257,17 +1256,17 @@ class ConverterWindow(QMainWindow):
     def dragEnterEvent(self, event):
         """Handles drag enter events to accept only file/folder drops."""
         print("DEBUG: dragEnterEvent triggered")
-        # if event.mimeData().hasUrls():
-        #     print("DEBUG: dragEnterEvent: Accepting - URLs found")
-        #     if self.statusbar: self.statusbar.showMessage("Drop files or folders here...", 2000)
-        #     event.acceptProposedAction()
-        # else:
-        #     print("DEBUG: dragEnterEvent: Ignoring - No URLs")
-        #     if self.statusbar: self.statusbar.showMessage("Drag ignored: No URLs found.", 2000)
-        #     event.ignore()
-        print("DEBUG: dragEnterEvent: Forcing acceptProposedAction() for debugging")
-        if self.statusbar: self.statusbar.showMessage("Drag detected (debug mode)", 2000)
-        event.acceptProposedAction()
+        if event.mimeData().hasUrls():
+            print("DEBUG: dragEnterEvent: Accepting - URLs found")
+            if self.statusbar: self.statusbar.showMessage("Drop files or folders here...", 2000)
+            event.acceptProposedAction()
+        else:
+            print("DEBUG: dragEnterEvent: Ignoring - No URLs")
+            if self.statusbar: self.statusbar.showMessage("Drag ignored: No URLs found.", 2000)
+            event.ignore()
+        # print("DEBUG: dragEnterEvent: Forcing acceptProposedAction() for debugging")
+        # if self.statusbar: self.statusbar.showMessage("Drag detected (debug mode)", 2000)
+        # event.acceptProposedAction()
 
     def dropEvent(self, event):
         """Handles drop events to process dropped files/folders."""
