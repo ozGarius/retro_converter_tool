@@ -2,6 +2,9 @@
 This document tracks the remaining tasks, and future plans for the Retro Converter Tool, featuring a Qt6 GUI.
 
 ## Recently Resolved
+*   **Added Drag and Drop** Implemented drag and drop of files in the interface.
+*   **m3u playlists creator** Added a new tool to create mp3 playlists.
+*   **Fixed Icon** Fixed the icon not showing as it was pointing to the wrong path.
 *   **GDI File Parsing Bug:** Fixed issue where dependent files for .gdi formats (especially with quoted filenames containing spaces) were not correctly identified and copied to the temporary directory. This has been fully resolved.
 *   **Cue File Parsing Bug:** Ensured dependent files for .cue files are correctly identified and copied (this was part of the same fix series as GDI).
 
@@ -10,6 +13,7 @@ This document tracks the remaining tasks, and future plans for the Retro Convert
     + Status: Mechanism is largely in place.
     + Next: Thorough testing across all conversion routines and error conditions to ensure all tool outputs (stdout/stderr) and internal messages are captured comprehensively and displayed clearly and promptly in the GUI log. Consider if any specific errors warrant a dialog box in addition to a log message.
 + Further testing with all tools to make sure they work as expected.
++ Improve m3u playlist, they work but not 100%
 
 ## II. Next Steps / Remaining Tasks
 
@@ -37,16 +41,6 @@ This document tracks the remaining tasks, and future plans for the Retro Convert
     + Save your preference.
     + Display active job count in status bar.
     + Consider adding progress indicators for each active job.
-
-+ About Dialog (Priority 3):
-    + Application name and version.
-    + Copyright information.
-    + Brief description.
-    + Third-party licenses section.
-    + Tools/libraries used (Python version, major dependencies).
-    + GitHub repository link (clickable).
-    + "Check for Updates" button (optional).
-    + Use standard dialog framework.
 
 + Packaging/Distribution (Single Executable Compilation - Priority 4):
     + Create standalone executable distribution (PyInstaller recommended, alternatives: cx_Freeze, Nuitka).
