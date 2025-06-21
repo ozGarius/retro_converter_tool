@@ -87,7 +87,22 @@ class ConverterWindow(QMainWindow):
             return
 
         self.ui.setAttribute(Qt.WA_DeleteOnClose, True)
-        self.setAcceptDrops(True)  # Enable drag and drop for the main window
+
+        # Ensure previous attempts are cleared
+        self.setAcceptDrops(False)
+        if hasattr(self.ui, 'setAcceptDrops'):
+            self.ui.setAcceptDrops(False)
+
+        central_w = self.centralWidget()
+        if central_w:
+            print("DEBUG: Setting acceptDrops on centralWidget")
+            central_w.setAcceptDrops(True)
+        elif hasattr(self.ui, 'setAcceptDrops'):
+            print("DEBUG: No central widget, setting acceptDrops on self.ui")
+            self.ui.setAcceptDrops(True)
+        else:
+            print("DEBUG: No central widget and self.ui does not support acceptDrops. Falling back to self (QMainWindow)")
+            self.setAcceptDrops(True)
 
         # --- Find UI Elements ---
         self.job_type_combo = self.ui.findChild(QComboBox, "job_type_combo")
@@ -1242,16 +1257,17 @@ class ConverterWindow(QMainWindow):
     def dragEnterEvent(self, event):
         """Handles drag enter events to accept only file/folder drops."""
         print("DEBUG: dragEnterEvent triggered")
-        if event.mimeData().hasUrls():
-            print("DEBUG: dragEnterEvent: Accepting - URLs found")
-            event.acceptProposedAction()
-            if self.statusbar:
-                self.statusbar.showMessage("Drop files or folders here...", 2000)
-        else:
-            print("DEBUG: dragEnterEvent: Ignoring - No URLs")
-            event.ignore()
-            if self.statusbar:
-                self.statusbar.showMessage("Drag ignored: No URLs found.", 2000)
+        # if event.mimeData().hasUrls():
+        #     print("DEBUG: dragEnterEvent: Accepting - URLs found")
+        #     if self.statusbar: self.statusbar.showMessage("Drop files or folders here...", 2000)
+        #     event.acceptProposedAction()
+        # else:
+        #     print("DEBUG: dragEnterEvent: Ignoring - No URLs")
+        #     if self.statusbar: self.statusbar.showMessage("Drag ignored: No URLs found.", 2000)
+        #     event.ignore()
+        print("DEBUG: dragEnterEvent: Forcing acceptProposedAction() for debugging")
+        if self.statusbar: self.statusbar.showMessage("Drag detected (debug mode)", 2000)
+        event.acceptProposedAction()
 
     def dropEvent(self, event):
         """Handles drop events to process dropped files/folders."""
