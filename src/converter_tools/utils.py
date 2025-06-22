@@ -132,6 +132,80 @@ def _get_gdi_dependencies(gdi_file_path):
     return dependencies
 
 
+def stage_job_files(primary_file_path, job_temp_dir, is_multi_file_type, copy_locally_setting, output_signal=None, error_signal=None):
+    """
+    Prepares files for a job in the job_temp_dir.
+    For multi-file types (CUE, GDI), it always copies the primary and dependent files.
+    For other types, it copies based on copy_locally_setting.
+    Returns the path to the primary file that should be processed (either in temp or original).
+    """
+    file_name_base_with_ext = os.path.basename(primary_file_path)
+    path_to_process = primary_file_path # Default to original path
+
+    # Ensure job_temp_dir exists (should be created by the caller, but double check)
+    if not os.path.exists(job_temp_dir):
+        try:
+            os.makedirs(job_temp_dir)
+            emit_or_print(f"INFO: Job temp directory created at: {job_temp_dir}", output_signal)
+        except Exception as e:
+            emit_or_print(f"ERROR: Failed to create job_temp_dir {job_temp_dir}: {e}", error_signal, is_error=True)
+            return None # Cannot proceed
+
+    # Determine dependencies
+    dependencies_to_copy = []
+    file_ext_lower = os.path.splitext(primary_file_path)[1].lower()
+
+    if is_multi_file_type: # e.g. CUE or GDI
+        emit_or_print(f">> Staging multi-file job for: {file_name_base_with_ext} into {job_temp_dir}", output_signal, fallback_color_code="cyan")
+        if file_ext_lower == '.cue':
+            dependencies_to_copy = _get_cue_dependencies(primary_file_path)
+        elif file_ext_lower == '.gdi':
+            dependencies_to_copy = _get_gdi_dependencies(primary_file_path)
+
+        # Copy primary file for multi-file types
+        try:
+            temp_primary_path = os.path.join(job_temp_dir, file_name_base_with_ext)
+            shutil.copy2(primary_file_path, temp_primary_path)
+            emit_or_print(f">> Copied primary file {file_name_base_with_ext} to temp.", output_signal)
+            path_to_process = temp_primary_path # Process the copy
+        except Exception as e:
+            emit_or_print(f"ERROR: Failed to copy primary file {file_name_base_with_ext} to temp: {e}", error_signal, is_error=True)
+            return None # Cannot proceed if primary file copy fails
+
+        # Copy dependencies for multi-file types
+        for dep_path in dependencies_to_copy:
+            dep_filename = os.path.basename(dep_path)
+            temp_dep_dest_path = os.path.join(job_temp_dir, dep_filename)
+            try:
+                if not os.path.exists(dep_path):
+                    emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.", error_signal, fallback_color_code="yellow")
+                    continue
+                shutil.copy2(dep_path, temp_dep_dest_path)
+                emit_or_print(f">> Copied dependent file \"{dep_filename}\" to temp.", output_signal)
+            except Exception as dep_e:
+                emit_or_print(f"ERROR: Failed to copy dependent file \"{dep_filename}\" to temp: {dep_e}", error_signal, is_error=True)
+                # Depending on strictness, you might want to return None here
+
+    elif copy_locally_setting: # Single file type, and copy_locally is True
+        emit_or_print(f">> Copying single file job for: {file_name_base_with_ext} to {job_temp_dir}", output_signal, fallback_color_code="cyan")
+        try:
+            temp_primary_path = os.path.join(job_temp_dir, file_name_base_with_ext)
+            if os.path.isdir(primary_file_path): # Should not happen for typical conversion jobs
+                shutil.copytree(primary_file_path, temp_primary_path, dirs_exist_ok=True)
+            else:
+                shutil.copy2(primary_file_path, temp_primary_path)
+            emit_or_print(f">> Copied {file_name_base_with_ext} to temp.", output_signal)
+            path_to_process = temp_primary_path # Process the copy
+        except Exception as e:
+            emit_or_print(f"ERROR: Failed to copy {file_name_base_with_ext} to temp: {e}", error_signal, is_error=True)
+            return None
+    else: # Single file type, and copy_locally is False
+        emit_or_print(f">> Processing single file job in-place (or tool handles source directly): {file_name_base_with_ext}", output_signal, fallback_color_code="cyan")
+        # path_to_process remains primary_file_path
+
+    return path_to_process
+
+
 def _strip_ansi_codes(text):
     if not text:
         return ""
@@ -378,7 +452,7 @@ def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal
         return False
 
 
-def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal=None):
+def cleanup(temp_path, output_signal=None, error_signal=None): # Removed original_file_path
     if temp_path and os.path.exists(temp_path):
         retries = 3
         while retries > 0:
@@ -402,19 +476,7 @@ def cleanup(temp_path, original_file_path=None, output_signal=None, error_signal
                     f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
                 break
 
-    if config.settings.DELETE_SOURCE_ON_SUCCESS and original_file_path and os.path.exists(original_file_path):
-        files_to_delete = [original_file_path]
-        base_name, ext = os.path.splitext(original_file_path)
-        if ext.lower() == '.cue':
-            bin_pattern = f"{re.escape(base_name)}*.bin"
-            cue_dir = os.path.dirname(original_file_path)
-            associated_bins = glob.glob(os.path.join(cue_dir, bin_pattern))
-            for bin_file in associated_bins:
-                if os.path.exists(bin_file) and bin_file.lower().startswith(base_name.lower()) and bin_file.lower().endswith(".bin"):
-                    if bin_file not in files_to_delete:
-                        files_to_delete.append(bin_file)
-                        emit_or_print(
-                            f">> Found associated file for deletion: \"{os.path.basename(bin_file)}\"", output_signal, fallback_color_code="green")
+    # Original file deletion logic is now handled in process_worker_task
 
 
 def check_tools_exist(tools_list: list[str]) -> bool:
@@ -476,90 +538,39 @@ def extract_archive(archive_path, output_dir, output_signal=None, error_signal=N
     return run_command(command, output_signal=output_signal, error_signal=error_signal)
 
 
-def process_file(file_path, conversion_func, format_out, format_out2=None,
+def process_file(staged_primary_file_path, job_temp_dir, original_file_path_for_naming_and_delete, conversion_func, format_out, format_out2=None,
                  output_signal=None, error_signal=None, explicit_output_dir=None, allow_overwrite=False,
                  target_format_from_worker=None, stage_reporter=None, file_progress_reporter=None):
-    original_dir_of_input_file = os.path.dirname(file_path)
-    file_name_base_with_ext = os.path.basename(file_path)
-    name_part, _ = os.path.splitext(file_name_base_with_ext)
+    # original_dir_of_input_file = os.path.dirname(staged_primary_file_path) # This is now job_temp_dir
+    file_name_base_with_ext = os.path.basename(staged_primary_file_path) # Name of the file in temp (should match original)
+    name_part, _ = os.path.splitext(file_name_base_with_ext) # Use this for output naming
 
-    final_output_destination_base = explicit_output_dir if explicit_output_dir else original_dir_of_input_file
+    # Determine final output destination
+    # If explicit_output_dir is provided (e.g. user selected custom output folder), use it.
+    # Otherwise, output to the same directory as the original input file.
+    original_input_dir_for_output = os.path.dirname(original_file_path_for_naming_and_delete)
+    final_output_destination_base = explicit_output_dir if explicit_output_dir else original_input_dir_for_output
+
     if not os.path.exists(final_output_destination_base):
         try:
             os.makedirs(final_output_destination_base)
+            emit_or_print(f"INFO: Created final output directory {final_output_destination_base}", output_signal)
         except OSError as e:
-            emit_or_print(
-                f"ERROR: Failed to create final output dir {final_output_destination_base}: {e}.", error_signal, is_error=True)
+            emit_or_print(f"ERROR: Failed to create final output dir {final_output_destination_base}: {e}.", error_signal, is_error=True)
             return False
 
-    if stage_reporter:
-        stage_reporter("Preparing")
-    temp_path_for_this_file = create_temp_dir(
-        file_path, output_signal=output_signal, error_signal=error_signal)
-    if temp_path_for_this_file is None:
-        return False
-
-    path_to_process_in_temp = file_path
-    if config.settings.COPY_LOCALLY:
-        emit_or_print(f">> Copying \"{file_name_base_with_ext}\" to \"{temp_path_for_this_file}\"",
-                       output_signal, fallback_color_code="green")
-        try:
-            target_copy_path = os.path.join(
-                temp_path_for_this_file, file_name_base_with_ext)
-            if os.path.isdir(file_path):
-                shutil.copytree(file_path, target_copy_path,
-                                dirs_exist_ok=True)
-            else:
-                shutil.copy2(file_path, target_copy_path)
-            path_to_process_in_temp = target_copy_path
-
-            # Check for .cue or .gdi files to copy dependencies
-            _, file_ext = os.path.splitext(file_path)
-            file_ext = file_ext.lower()
-
-            dependencies_to_copy = []
-            if file_ext == '.cue':
-                dependencies_to_copy = _get_cue_dependencies(file_path)
-            elif file_ext == '.gdi':
-                dependencies_to_copy = _get_gdi_dependencies(file_path)
-
-            for dep_path in dependencies_to_copy:
-                dep_filename = os.path.basename(dep_path)
-                temp_dep_dest_path = os.path.join(
-                    temp_path_for_this_file, dep_filename)
-                try:
-                    if not os.path.exists(dep_path):
-                        emit_or_print(f"WARNING: Dependent file \"{dep_filename}\" not found at \"{dep_path}\". Skipping copy.",
-                                       error_signal, fallback_color_code="yellow")
-                        continue  # Skip to next dependency
-
-                    emit_or_print(f">> Copying dependent file \"{dep_filename}\" to \"{temp_dep_dest_path}\"",
-                                   output_signal, fallback_color_code="green")
-                    shutil.copy2(dep_path, temp_dep_dest_path)
-                except Exception as dep_e:
-                    emit_or_print(f"ERROR: Failed to copy dependent file \"{dep_filename}\" to temp: {dep_e}",
-                                   error_signal, is_error=True)
-                    # Decide if this error should halt the entire process.
-                    # For now, we log and continue, the main conversion might fail later.
-
-        except Exception as e:
-            emit_or_print(
-                f"ERROR: Failed to copy \"{file_name_base_with_ext}\" or its dependencies to temp: {e}", error_signal, is_error=True)
-            cleanup(temp_path_for_this_file,
-                    output_signal=output_signal, error_signal=error_signal)
-            return False
-    else:
-        emit_or_print(f">> Processing \"{file_name_base_with_ext}\" with outputs to temp. (COPY_LOCALLY=False)",  # This check should use config.settings.COPY_LOCALLY implicitly by falling into else
-                       output_signal, fallback_color_code="green")
+    # The "Preparing" stage, including file copying, is now done by stage_job_files before this function is called.
+    # So, staged_primary_file_path is the path to the file (potentially inside job_temp_dir) that the tool should process.
+    # job_temp_dir is where the conversion tool should write its raw output.
 
     if stage_reporter:
-        stage_reporter("Converting")
+        stage_reporter("Converting") # Report current stage
     if file_progress_reporter:
         file_progress_reporter(33)  # Conversion starting
     conversion_args = {
-        "processing_path": path_to_process_in_temp,
-        "temp_dir": temp_path_for_this_file,
-        "name": name_part,
+        "processing_path": staged_primary_file_path, # This is the path to the primary file, possibly in job_temp_dir
+        "temp_dir": job_temp_dir,                   # This is where the tool should write its direct output
+        "name": name_part,                          # Base name for output files
         "output_signal": output_signal,
         "error_signal": error_signal
     }
@@ -567,121 +578,108 @@ def process_file(file_path, conversion_func, format_out, format_out2=None,
         conversion_args["target_format_from_worker"] = target_format_from_worker
     conversion_successful = conversion_func(**conversion_args)
 
-    # *** ADDED PAUSE FOR DEBUGGING ***
-    # if output_signal is None: # Assuming CLI mode if no output_signal
-    # emit_or_print(
-    #     f"\n--- PAUSED FOR DEBUGGING (process_file after conversion_func for '{file_name_base_with_ext}') ---", fallback_color_code="magenta")
-    # emit_or_print(
-    #     f"Conversion successful reported by function: {conversion_successful}", fallback_color_code="magenta")
-    # emit_or_print(
-    #     f"Temp directory is: {temp_path_for_this_file}", fallback_color_code="magenta")
-    # emit_or_print("You can now inspect the temp directory.",
-    #                fallback_color_code="magenta")
-    # input("Press Enter to continue...")
-    # *** END OF ADDED PAUSE ***
+    # Debugging pause can be re-enabled if needed by uncommenting here
+    # ...
 
     if stage_reporter:
         stage_reporter("Finalizing")
     if file_progress_reporter:
         file_progress_reporter(66)  # Finalizing stage
+
     if conversion_successful:
         primary_move_ok = False
+        # Determine effective output format (used by tool)
         effective_format_out = target_format_from_worker if target_format_from_worker and \
             hasattr(conversion_func, '__code__') and \
             'target_format_from_worker' in conversion_func.__code__.co_varnames else format_out
 
-        if effective_format_out:
+        if effective_format_out: # If there's a primary output file expected
             expected_primary_output_filename = f"{name_part}.{effective_format_out}"
-            expected_primary_output_full_path = os.path.join(
-                temp_path_for_this_file, expected_primary_output_filename)
+            # The conversion tool writes its output directly into job_temp_dir
+            expected_primary_output_full_path_in_job_temp = os.path.join(
+                job_temp_dir, expected_primary_output_filename)
 
-            found_primary_in_temp = []
-            if os.path.isfile(expected_primary_output_full_path):
-                found_primary_in_temp.append(expected_primary_output_full_path)
-                emit_or_print(
-                    f"DEBUG_UTIL: Successfully located expected primary output: {expected_primary_output_full_path}", output_signal)
-            else:
-                emit_or_print(
-                    f"DEBUG_UTIL: Direct check os.path.isfile failed for: {expected_primary_output_full_path}", error_signal, is_error=True)
-                all_files_in_temp_root = glob.glob(
-                    os.path.join(temp_path_for_this_file, "*"))
-                emit_or_print(
-                    f"DEBUG_UTIL: Contents of temp root '{temp_path_for_this_file}': {all_files_in_temp_root}", output_signal)
-
-                original_glob_results = glob.glob(os.path.join(
-                    temp_path_for_this_file, '**', f"*.{effective_format_out}"), recursive=True)
-                emit_or_print(
-                    f"DEBUG_UTIL: Original glob '**/ *.{effective_format_out}' found: {original_glob_results}", output_signal)
-
-            if not found_primary_in_temp:
-                err_msg_missing = f"ERROR: Expected primary output ('{expected_primary_output_filename}') not found in temp dir '{temp_path_for_this_file}' for input \"{file_name_base_with_ext}\"."
-                emit_or_print(err_msg_missing, error_signal, is_error=True)
-                primary_move_ok = False
-            else:
-                if move_files(temp_path_for_this_file, final_output_destination_base, expected_primary_output_filename,
+            # Check if the expected primary output exists in job_temp_dir
+            if os.path.isfile(expected_primary_output_full_path_in_job_temp):
+                emit_or_print(f"DEBUG_UTIL: Located expected primary output: {expected_primary_output_full_path_in_job_temp}", output_signal)
+                # Move the primary output file
+                if move_files(job_temp_dir, final_output_destination_base, expected_primary_output_filename,
                               output_signal, error_signal, allow_overwrite):
                     primary_move_ok = True
                 else:
-                    emit_or_print(f"ERROR: Primary output ('{expected_primary_output_filename}') for \"{file_name_base_with_ext}\" was not moved.",
+                    emit_or_print(f"ERROR: Primary output ('{expected_primary_output_filename}') for \"{original_file_path_for_naming_and_delete}\" was not moved.",
                                    error_signal, is_error=True)
-                    primary_move_ok = False
+            else:
+                emit_or_print(f"ERROR: Expected primary output ('{expected_primary_output_filename}') not found in job temp dir '{job_temp_dir}' for input \"{original_file_path_for_naming_and_delete}\".",
+                               error_signal, is_error=True)
+                all_files_in_temp_root = glob.glob(os.path.join(job_temp_dir, "*"))
+                emit_or_print(f"DEBUG_UTIL: Contents of job temp root '{job_temp_dir}': {all_files_in_temp_root}", output_signal)
 
-            if primary_move_ok and format_out2:
-                if not move_files(temp_path_for_this_file, final_output_destination_base, f"*.{format_out2}",
+
+            # Handle secondary files (e.g., .bin for .cue, .raw for .gdi) if primary moved ok
+            if primary_move_ok and format_out2: # format_out2 might indicate other general patterns
+                if not move_files(job_temp_dir, final_output_destination_base, f"*.{format_out2}",
                                   output_signal, error_signal, allow_overwrite):
-                    emit_or_print(f"WARNING: Secondary output (*.{format_out2}) move failed or files skipped for \"{file_name_base_with_ext}\".",
+                    emit_or_print(f"WARNING: Secondary output (*.{format_out2}) move failed or files skipped for \"{original_file_path_for_naming_and_delete}\".",
                                    error_signal, fallback_color_code="yellow")
 
-            if effective_format_out == 'gdi' and primary_move_ok:
-                move_files(temp_path_for_this_file, final_output_destination_base,
-                           "*.bin", output_signal, error_signal, allow_overwrite)
-                move_files(temp_path_for_this_file, final_output_destination_base,
-                           "*.raw", output_signal, error_signal, allow_overwrite)
+            # Specific handling for GDI/CUE dependent files that are part of the output set
+            # These are usually created alongside the primary .gdi/.cue in the job_temp_dir by chdman extract
+            if primary_move_ok:
+                if effective_format_out == 'gdi':
+                    move_files(job_temp_dir, final_output_destination_base, "*.bin", output_signal, error_signal, allow_overwrite)
+                    move_files(job_temp_dir, final_output_destination_base, "*.raw", output_signal, error_signal, allow_overwrite)
+                elif effective_format_out == 'cue': # For CHD to CUE extraction
+                    # Move all .bin files that were created by chdman extractcd
+                    # Pattern should be specific enough if name_part is used, e.g., f"{name_part}*.bin"
+                    # For simplicity, moving all .bin files from temp if not already moved.
+                    # This assumes chdman extractcd -o temp/mygame.cue produces temp/mygame.cue and temp/mygame_track01.bin etc.
+                    move_files(job_temp_dir, final_output_destination_base, f"{name_part}*.bin", output_signal, error_signal, allow_overwrite)
+                    move_files(job_temp_dir, final_output_destination_base, f"{name_part}*.wav", output_signal, error_signal, allow_overwrite) # If any audio tracks
 
-        else:
+        else: # No specific primary output file (e.g., extract_archive_to_folder_routine, or info jobs)
             if conversion_func.__name__ == "extract_archive_to_folder_routine":
-                archive_output_folder = os.path.join(
-                    final_output_destination_base, name_part)
-                if not os.path.exists(archive_output_folder):
-                    os.makedirs(archive_output_folder)
+                # Output is an entire folder, named after the archive.
+                archive_output_folder_name = name_part # Folder name is base name of archive
+                # All contents of job_temp_dir (which should be the extracted files) are moved.
+                # The destination is a new sub-folder in final_output_destination_base.
+                final_archive_extract_path = os.path.join(final_output_destination_base, archive_output_folder_name)
 
-                all_moved_ok = True
-                for item_name in os.listdir(temp_path_for_this_file):
-                    s_item = os.path.join(temp_path_for_this_file, item_name)
-                    d_item = os.path.join(archive_output_folder, item_name)
+                if os.path.exists(final_archive_extract_path):
+                    if allow_overwrite:
+                        emit_or_print(f"INFO: Overwriting existing extraction folder: {final_archive_extract_path}", output_signal)
+                        shutil.rmtree(final_archive_extract_path)
+                    else:
+                        emit_or_print(f"ERROR: Extraction folder {final_archive_extract_path} already exists and overwrite is false.", error_signal, is_error=True)
+                        primary_move_ok = False # Set to false as we can't proceed
+
+                if primary_move_ok is not False: # Check if not already failed
                     try:
-                        if os.path.exists(d_item):
-                            if allow_overwrite:
-                                if os.path.isdir(d_item):
-                                    shutil.rmtree(d_item)
-                                else:
-                                    os.remove(d_item)
-                            else:
-                                emit_or_print(
-                                    f"Skipping existing item in destination: {d_item}", error_signal, fallback_color_code="yellow")
-                                continue
-                        shutil.move(s_item, d_item)
-                    except Exception as e_move_item:
-                        emit_or_print(
-                            f"ERROR moving extracted item {item_name}: {e_move_item}", error_signal, is_error=True)
-                        all_moved_ok = False
-                primary_move_ok = all_moved_ok
-            else:
-                primary_move_ok = True
+                        shutil.copytree(job_temp_dir, final_archive_extract_path, dirs_exist_ok=allow_overwrite)
+                        emit_or_print(f"Extracted archive contents moved to {final_archive_extract_path}", output_signal)
+                        primary_move_ok = True
+                    except Exception as e_extract_move:
+                        emit_or_print(f"ERROR moving extracted archive contents from {job_temp_dir} to {final_archive_extract_path}: {e_extract_move}", error_signal, is_error=True)
+                        primary_move_ok = False
+            elif "info_routine" in conversion_func.__name__ or "verify_routine" in conversion_func.__name__:
+                # These routines typically print to console/log; no files to move.
+                emit_or_print(f"Info/Verify job for {original_file_path_for_naming_and_delete} completed.", output_signal)
+                primary_move_ok = True # Considered successful if the function itself reported success
+            else: # Some other conversion type that doesn't fit known patterns
+                emit_or_print(f"WARNING: Conversion for {original_file_path_for_naming_and_delete} reported success, but no specific output file handling defined.", error_signal, fallback_color_code="yellow")
+                primary_move_ok = True # Assume success if conversion_func returned true
 
         if primary_move_ok:
             if file_progress_reporter:
                 file_progress_reporter(100)  # Complete
-            cleanup(temp_path_for_this_file,
-                    file_path if config.settings.DELETE_SOURCE_ON_SUCCESS else None, output_signal, error_signal)
+            # Cleanup the job_temp_dir.
+            cleanup(job_temp_dir, output_signal=output_signal, error_signal=error_signal)
             return True
-        else:
-            cleanup(temp_path_for_this_file,
-                    output_signal=output_signal, error_signal=error_signal)
+        else: # primary_move_ok is False
+            cleanup(job_temp_dir, output_signal=output_signal, error_signal=error_signal)
             return False
-    else:
-        cleanup(temp_path_for_this_file, output_signal=output_signal,
-                error_signal=error_signal)
+    else: # conversion_successful is False
+        cleanup(job_temp_dir, output_signal=output_signal, error_signal=error_signal)
         return False
 
 

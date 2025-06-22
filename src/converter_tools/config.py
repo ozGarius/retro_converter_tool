@@ -225,6 +225,27 @@ class AppSettings:
         except Exception as e:
             print(f"ERROR: Could not save AppSettings instance to {file_path}: {e}")
 
+    def get_all_settings_for_sharing(self):
+        """Returns a dictionary of all settings, suitable for pickling or simple serialization."""
+        # Only include keys that are in DEFAULT_SETTINGS to avoid internal/dynamic attributes
+        shared = {key: getattr(self, key) for key in DEFAULT_SETTINGS.keys() if hasattr(self, key)}
+        return shared
+
+    def restore_from_shared(self, shared_settings_dict):
+        """
+        Restores settings from a dictionary (e.g., received from another process).
+        Caution: This should be used carefully, ensuring the source is trusted
+        and the dictionary structure is compatible.
+        """
+        for key, value in shared_settings_dict.items():
+            if key in DEFAULT_SETTINGS.keys(): # Only restore known keys
+                setattr(self, key, value)
+            # else:
+                # print(f"Warning: Key '{key}' from shared settings not restored (not a default key).")
+        # Potentially re-validate or re-initialize derived settings if necessary
+        # For now, this is a direct update.
+        print(f"Worker process ({os.getpid()}) restored settings. Example COPY_LOCALLY: {self.COPY_LOCALLY}")
+
 
 # Create a global instance of AppSettings
 settings = AppSettings()

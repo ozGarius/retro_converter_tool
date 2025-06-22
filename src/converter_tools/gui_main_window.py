@@ -7,6 +7,8 @@ import time
 import json
 import multiprocessing
 import threading
+import concurrent.futures
+from multiprocessing import Manager
 
 try:
     from PySide6.QtWidgets import (
@@ -41,8 +43,11 @@ from src.converter_tools import menu_definitions
 
 # GUI components from other files in this package
 from src.converter_tools.gui_settings import SettingsDialog
-from src.converter_tools.gui_worker import ConversionWorker, N_STAGES_PER_FILE
 from src.converter_tools.gui_m3u_creator import M3UCreatorWindow
+
+
+# Number of distinct stages reported by utils.process_file for progress tracking.
+N_STAGES_PER_FILE = 3
 
 # Constants
 COL_CHECK = 0
@@ -62,6 +67,183 @@ ICON_PATH = os.path.join(os.path.dirname(__file__), "assets", "icons", "app_icon
 # Thread timeouts
 THREAD_STOP_TIMEOUT = 3000  # milliseconds
 QUIT_THREAD_TIMEOUT = 2000  # milliseconds
+
+
+# --- Worker Process Task ---
+# This function will be run by each process in the ProcessPoolExecutor
+def process_worker_task(job_queue, results_queue):
+    # Minimal re-initialization of config for the process if needed
+    # For now, assume settings are passed per job or are simple enough not to need full re-init
+    # config.initialize_config_for_process() # Hypothetical function
+
+    while True:
+        try:
+            job_payload = job_queue.get()
+            if job_payload is None:  # Sentinel value to stop the worker
+                break
+
+            job_id = job_payload["job_id"]
+            original_file_path = job_payload["file_path"] # Renamed for clarity
+            conversion_func_name = job_payload["conversion_func_name"]
+            output_folder_path_final_dest = job_payload["output_folder_path"] # Renamed for clarity
+            overwrite_files = job_payload["overwrite_files"]
+            selected_primary_output_ext = job_payload["selected_primary_output_ext"]
+            selected_secondary_output_ext = job_payload["selected_secondary_output_ext"]
+            is_multi_file_job_type = job_payload.get("is_multi_file_job_type", False)
+
+            job_temp_dir = None # Initialize
+
+            try:
+                # Restore settings in the worker process's global config.settings object
+                shared_settings_dict = job_payload.get("config_settings_dict", {})
+                config.settings.restore_from_shared(shared_settings_dict)
+            except Exception as e:
+                results_queue.put({"job_id": job_id, "type": "error_update", "data": {"message": f"Worker process failed to eval settings: {e}"}})
+                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": "Settings failure"}})
+                continue
+
+            current_file_name = os.path.basename(original_file_path)
+            results_queue.put({"job_id": job_id, "type": "job_started", "data": {"filename": current_file_name, "total_stages": N_STAGES_PER_FILE}})
+
+            # --- Signal Wrappers for results_queue ---
+            def send_output_update_worker(message): # Renamed to avoid conflict if this file also has send_output_update
+                results_queue.put({"job_id": job_id, "type": "output_update", "data": {"message": message}})
+
+            def send_error_update_worker(message, is_error=True):
+                results_queue.put({"job_id": job_id, "type": "error_update", "data": {"message": message}})
+
+            # Create job-specific temp directory
+            # utils.create_temp_dir needs the base name of the input file for its prefix logic.
+            job_temp_dir = utils.create_temp_dir(original_file_path, output_signal=send_output_update_worker, error_signal=send_error_update_worker)
+            if not job_temp_dir:
+                send_error_update_worker(f"Failed to create temp directory for job {job_id}.")
+                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": "Temp dir creation failed"}})
+                continue
+
+            # Stage files into the job_temp_dir
+            path_to_process_in_temp = utils.stage_job_files(
+                original_file_path,
+                job_temp_dir,
+                is_multi_file_job_type,
+                config.settings.COPY_LOCALLY, # Use restored setting
+                output_signal=send_output_update_worker,
+                error_signal=send_error_update_worker
+            )
+
+            if not path_to_process_in_temp:
+                send_error_update_worker(f"Failed to stage files for job {job_id} ({current_file_name}).")
+                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": "File staging failed"}})
+                if job_temp_dir: utils.cleanup(job_temp_dir, output_signal=send_output_update_worker, error_signal=send_error_update_worker)
+                continue
+
+            cumulative_stages_done_for_file = 0
+            def stage_reporter_for_process_file(stage_description):
+                nonlocal cumulative_stages_done_for_file
+                cumulative_stages_done_for_file +=1
+                results_queue.put({
+                    "job_id": job_id, "type": "status_update", # This was overall progress, now it's per-job stage
+                    "data": {
+                        "description": stage_description,
+                        "current_step": cumulative_stages_done_for_file,
+                        "total_steps": N_STAGES_PER_FILE
+                    }
+                })
+                # Simple percentage for individual file progress bar
+                file_percentage = int((cumulative_stages_done_for_file / N_STAGES_PER_FILE) * 100)
+                results_queue.put({
+                    "job_id": job_id, "type": "file_progress_update",
+                    "data": {"percentage": file_percentage}
+                })
+
+
+            # --- Get the actual conversion function ---
+            conv_func = getattr(conversions, conversion_func_name, None) if conversion_func_name else None
+            if not callable(conv_func):
+                error_msg = f"Conversion function '{conversion_func_name}' not found in worker."
+                send_error_update(error_msg)
+                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": error_msg}})
+                continue
+
+            # --- Call utils.process_file ---
+            # Note: utils.process_file and its dependencies (like utils.run_command)
+            # must be safe to run in a separate process. They should not rely on GUI elements
+            # or shared state that isn't process-safe.
+            # The `output_signal` and `error_signal` are now wrappers.
+
+            # Critical: File dependency handling needs to be done here or within process_file
+            # For now, assuming process_file or the conversion routines handle it based on the main file_path
+
+            success = utils.process_file(
+                staged_primary_file_path=path_to_process_in_temp, # Path to the file that should be processed by the tool
+                job_temp_dir=job_temp_dir, # The temp dir where the tool writes output
+                original_file_path_for_naming_and_delete=original_file_path, # Used for output naming and optional deletion
+                conversion_func=conv_func,
+                format_out=selected_primary_output_ext, # Primary output extension expected
+                format_out2=selected_secondary_output_ext, # Secondary output extension, if any
+                output_signal=send_output_update_worker,
+                error_signal=send_error_update_worker,
+                explicit_output_dir=output_folder_path_final_dest, # Final destination for processed files
+                allow_overwrite=overwrite_files,
+                target_format_from_worker=selected_primary_output_ext, # Hint for some conversion functions
+                stage_reporter=stage_reporter_for_process_file
+            )
+
+            # Ensure final progress update if not already sent by stage_reporter
+            if cumulative_stages_done_for_file < N_STAGES_PER_FILE: # Should typically be N_STAGES_PER_FILE - 1 before this
+                 final_stage_desc = "Completed" if success else "Failed"
+                 # This will push it to N_STAGES_PER_FILE
+                 stage_reporter_for_process_file(final_stage_desc)
+
+            results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": success}})
+
+            # Handle deletion of original file if successful and configured
+            if success and config.settings.DELETE_SOURCE_ON_SUCCESS:
+                send_output_update_worker(f"Job successful, deleting source: {original_file_path}")
+                # utils.cleanup takes care of original file deletion if path is provided
+                # However, the main job_temp_dir cleanup is done by process_file.
+                # We need a separate call for the original source files.
+                # Let's make a small helper or call send2trash directly.
+                try:
+                    # For CUE/GDI, delete dependencies as well
+                    files_to_delete_source = [original_file_path]
+                    if is_multi_file_job_type:
+                        if original_file_path.lower().endswith('.cue'):
+                            files_to_delete_source.extend(utils._get_cue_dependencies(original_file_path))
+                        elif original_file_path.lower().endswith('.gdi'):
+                            files_to_delete_source.extend(utils._get_gdi_dependencies(original_file_path))
+
+                    for f_path_to_del in set(files_to_delete_source): # Use set to avoid duplicates
+                        if os.path.exists(f_path_to_del):
+                            if send2trash:
+                                send2trash.send2trash(f_path_to_del)
+                                send_output_update_worker(f"Sent to trash: {f_path_to_del}")
+                            else:
+                                os.remove(f_path_to_del) # Fallback to permanent delete
+                                send_output_update_worker(f"Permanently deleted: {f_path_to_del} (send2trash not available)")
+                except Exception as del_e:
+                    send_error_update_worker(f"Error deleting source file {original_file_path} or its dependencies: {del_e}")
+
+        except Exception as e:
+            tb_str = traceback.format_exc()
+            # Try to inform the main thread about the error
+            try:
+                job_id_error = job_payload.get("job_id", "unknown") if 'job_payload' in locals() else "unknown"
+                results_queue.put({
+                    "job_id": job_id_error, "type": "error_update",
+                    "data": {"message": f"Unhandled error in worker process: {e}\n{tb_str}"}
+                })
+                results_queue.put({"job_id": job_id_error, "type": "job_completed", "data": {"success": False, "message": str(e)}})
+            except Exception as queue_e:
+                # If we can't even put to queue, print to stderr (might be visible in console)
+                print(f"WORKER ERROR (job: {job_id_error if 'job_id_error' in locals() else 'unknown'}): {e}\n{tb_str}", file=sys.stderr)
+                print(f"WORKER ERROR: Could not put error to results_queue: {queue_e}", file=sys.stderr)
+            if job_payload is None: # If error happened while getting None (sentinel)
+                break # Exit loop
+            # Continue to next job if possible, or break if error is too severe (e.g. sentinel processing)
+            continue # Try to process next job
+    # Worker process is finishing
+    print(f"Worker process {os.getpid()} exiting.")
+
 
 # Hardcoded content (avoiding README parsing)
 TOOLS_USED_TEXT = (
@@ -167,14 +349,34 @@ class ConverterWindow(QMainWindow):
             ('overall_label', QLabel),
             ('overall_progress_bar', QProgressBar),
             ('overall_cancel_button', QPushButton),
-            ('file_label', QLabel),
-            ('file_progress_bar', QProgressBar),
-            ('file_cancel_button', QPushButton),
+            ('file_label', QLabel), # Will be hidden if dynamic rows replace it
+            ('file_progress_bar', QProgressBar), # Will be hidden
+            ('file_cancel_button', QPushButton), # Will be hidden
         ]
 
         # Find all widgets
         for attr_name, widget_type in widget_mappings:
             setattr(self, attr_name, self.ui.findChild(widget_type, attr_name))
+
+        # Create a dedicated layout for dynamic progress bars
+        if self.progress_group_box:
+            if not self.progress_group_box.layout():
+                # If progress_group_box has no layout, create one (e.g., QVBoxLayout)
+                # This might indicate an issue with the .ui file or assumptions
+                initial_layout = QVBoxLayout(self.progress_group_box)
+                self.progress_group_box.setLayout(initial_layout)
+
+            # Assuming the existing elements (overall progress) are already in the layout.
+            # We add a new QGridLayout for the dynamic job rows.
+            self.dynamic_progress_layout = QGridLayout()
+            # Add some spacing or a separator if needed before this new layout
+            # Example: self.progress_group_box.layout().addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Minimum, QSizePolicy.Expanding))
+            self.progress_group_box.layout().addLayout(self.dynamic_progress_layout)
+        else:
+            # This would be a problem, as we need a parent for dynamic rows
+            self.dynamic_progress_layout = None
+            self._log_warning("progress_group_box not found, dynamic UI rows for jobs cannot be created.")
+
 
         # Setup status bar
         self.statusbar = self.ui.statusBar() if hasattr(self.ui, 'statusBar') and self.ui.statusBar() else QStatusBar(self.ui)
@@ -211,15 +413,20 @@ class ConverterWindow(QMainWindow):
         """Set initial UI states."""
         # Progress UI
         if self.progress_group_box:
-            self.progress_group_box.setVisible(False)
+            self.progress_group_box.setVisible(False) # Initially hide the whole group
         
-        for progress_bar in [self.overall_progress_bar, self.file_progress_bar]:
-            if progress_bar:
-                progress_bar.setValue(0)
+        if self.overall_progress_bar: # Overall progress bar is still used
+            self.overall_progress_bar.setValue(0)
+        if self.overall_label:
+            self.overall_label.setText("Overall Progress:")
 
-        for label, text in [(self.overall_label, "Overall Progress:"), (self.file_label, "Current File:")]:
-            if label:
-                label.setText(text)
+        # Hide the old single file progress elements as dynamic rows will be used
+        if self.file_label:
+            self.file_label.setVisible(False)
+        if self.file_progress_bar:
+            self.file_progress_bar.setVisible(False)
+        if self.file_cancel_button:
+            self.file_cancel_button.setVisible(False)
 
         # File table setup
         if self.file_table:
@@ -272,12 +479,25 @@ class ConverterWindow(QMainWindow):
 
     def _initialize_variables(self):
         """Initialize member variables."""
-        self.conversion_thread = None
         self.table_data = []
         self.selected_job_details = None
         self.selected_media_type_details = None
         self.active_input_filters = set()
         self.selected_output_filter = None
+
+        # For multi-processing
+        self._process_pool_executor = None # Will be initialized later
+        self._job_queue = Manager().Queue()
+        self._results_queue = Manager().Queue()
+        self._active_jobs = {} # To track UI elements for each job
+        self._job_id_counter = 0
+
+        # Timer to check for results from worker processes
+        self._results_timer = QTimer(self)
+        self._results_timer.timeout.connect(self._process_results_queue)
+        # Interval can be adjusted, e.g., 100ms
+        self._results_timer.setInterval(100)
+
 
     def _finalize_initialization(self):
         """Complete the initialization process."""
@@ -472,42 +692,67 @@ class ConverterWindow(QMainWindow):
     # Threading and conversion methods
     def _ensure_thread_stopped(self):
         """Ensures the conversion thread is properly stopped."""
-        if self.conversion_thread and self.conversion_thread.isRunning():
-            self.conversion_thread.request_stop()
-            if not self.conversion_thread.wait(THREAD_STOP_TIMEOUT):
-                self._emit_or_print("WARNING: Conversion thread did not stop gracefully, forcing termination.",
-                                  fallback_color_code="yellow")
-                self.conversion_thread.terminate()
-            self.conversion_thread = None
+        # This method is now largely obsolete due to ProcessPoolExecutor.
+        # Kept for structure if any old single-threaded path remained, but should be empty.
+        pass
+
+    def _shutdown_executor(self):
+        """Shuts down the process pool executor."""
+        if self._process_pool_executor:
+            self._emit_or_print("Shutting down worker processes...", fallback_color_code="cyan")
+            # Signal workers to stop (if they check for a sentinel or queue status)
+            # For now, rely on executor shutdown. Will need a more graceful stop for workers.
+            # Potentially add sentinel values to the job queue for each worker.
+            for _ in range(config.settings.CONCURRENT_JOBS): # Send sentinel for each potential worker
+                try:
+                    self._job_queue.put(None, timeout=0.1) # Sentinel value
+                except Exception: # Queue might be full or other issues
+                    pass
+            self._process_pool_executor.shutdown(wait=True)
+            self._process_pool_executor = None
+            self._emit_or_print("Worker processes shut down.", fallback_color_code="green")
 
     @Slot()
     def _on_about_to_quit(self):
         """Handle application quit signal."""
         print("DEBUG: QApplication.aboutToQuit signal received in ConverterWindow.")
-        self._ensure_thread_stopped()
-        if self.conversion_thread and self.conversion_thread.isRunning():
-            print("DEBUG: Conversion thread is running, requesting stop during app quit.")
-            self.conversion_thread.request_stop()
-            if not self.conversion_thread.wait(QUIT_THREAD_TIMEOUT):
-                print("DEBUG: Conversion thread did not stop gracefully after 2s in aboutToQuit.")
-            else:
-                print("DEBUG: Conversion thread stopped gracefully in aboutToQuit.")
-        else:
-            print("DEBUG: No conversion thread running or thread is None in aboutToQuit.")
+        self._request_conversion_stop() # Request ongoing jobs to stop
+        self._shutdown_executor()
+        if self._results_timer.isActive():
+            self._results_timer.stop()
         print("DEBUG: Exiting _on_about_to_quit in ConverterWindow.")
 
     @Slot()
     def _request_conversion_stop(self):
         """Request conversion to stop."""
-        if self.conversion_thread and self.conversion_thread.isRunning():
-            self.conversion_thread.request_stop()
-            
-            for button in [self.overall_cancel_button, self.file_cancel_button]:
-                if button:
-                    button.setEnabled(False)
-            
-            if self.statusbar:
-                self.statusbar.showMessage("Cancellation requested...")
+        # This needs to be adapted for ProcessPoolExecutor.
+        # For now, it might involve setting a flag that workers check,
+        # or clearing the job queue and relying on executor shutdown.
+        # A more robust solution would involve sending a stop signal to specific PIDs
+        # or having workers periodically check a shared stop flag.
+        self._emit_or_print("Overall cancellation requested. Active jobs should stop after their current task.", fallback_color_code="yellow")
+        # Clear pending jobs from the queue
+        while not self._job_queue.empty():
+            try:
+                self._job_queue.get_nowait()
+            except Exception:
+                break
+
+        # For running jobs, they need to cooperatively stop.
+        # This is a placeholder; true cancellation of running subprocesses is complex.
+        # The current `utils.run_command` doesn't have a non-blocking way to terminate its process from here.
+        # For now, we'll rely on the fact that new jobs won't be picked up.
+        # Full cancellation of individual running jobs is a future task as per requirements.
+
+        # The old QThread based cancellation logic is removed.
+        # For overall cancel, disabling the buttons is handled by set_ui_enabled_for_conversion(False)
+        # when starting, and they are re-enabled when all jobs complete or UI is reset.
+        # Individual cancel buttons on dynamic rows would need separate logic if they were functional.
+        if self.overall_cancel_button:
+             self.overall_cancel_button.setEnabled(False) # Disable during cancellation process
+        if self.statusbar:
+            self.statusbar.showMessage("Overall cancellation requested. Pending jobs cleared.")
+
 
     # Settings and job management
     @Slot()
@@ -1266,7 +1511,172 @@ class ConverterWindow(QMainWindow):
         if output_folder is False:  # Explicit False means validation failed
             return
 
-        self._start_conversion_thread(selected_files_data, output_folder)
+        self._start_conversion_processes(selected_files_data, output_folder)
+
+    @Slot()
+    def _process_results_queue(self):
+        """Process messages from the results queue sent by worker processes."""
+        while not self._results_queue.empty():
+            try:
+                message = self._results_queue.get_nowait()
+                job_id = message.get("job_id", -1)
+                message_type = message.get("type")
+                data = message.get("data")
+
+                if message_type == "status_update": # This is per-job stage update
+                    description = data.get('description', '')
+                    # current_step = data.get('current_step', 0) # This is stage number 1,2,3
+                    # total_steps = data.get('total_steps', N_STAGES_PER_FILE) # This is N_STAGES_PER_FILE
+                    # We can use this to update the job's label if needed, e.g. with stage_description
+                    if job_id in self._active_jobs and self._active_jobs[job_id].get('label'):
+                         self._active_jobs[job_id]['label'].setText(f"{self._active_jobs[job_id]['filename']} [{description}]")
+                    self._emit_or_print(f"Job {job_id} Stage: {description}", fallback_color_code="cyan")
+
+                elif message_type == "file_progress_update": # This is percentage for the job's file
+                    percentage = data.get('percentage', 0)
+                    self._update_job_progress(job_id, percentage)
+                    # self._emit_or_print(f"Job {job_id} File Progress: {percentage}%", fallback_color_code="blue") # Log less
+                elif message_type == "output_update":
+                    self._emit_or_print(f"Job {job_id} Log: {data['message']}")
+                elif message_type == "error_update":
+                    self._emit_or_print(f"Job {job_id} Error: {data['message']}", fallback_color_code="red")
+                elif message_type == "job_started":
+                    # TODO: Create UI elements for this job_id
+                    filename = data.get("filename", "Unknown file")
+                    self._emit_or_print(f"Job {job_id} Started: {filename}", fallback_color_code="green")
+                    self._add_job_progress_row(job_id, filename)
+                elif message_type == "job_completed":
+                    success = data.get("success", False)
+                    job_filename = self._active_jobs.get(job_id, {}).get('filename', 'Unknown job') # Get filename from stored active jobs
+
+                    if success:
+                        self._emit_or_print(f"Job {job_id} ({job_filename}) Completed Successfully.", fallback_color_code="green")
+                    else:
+                        self._emit_or_print(f"Job {job_id} ({job_filename}) Failed. Check logs for details: {data.get('message', '')}", fallback_color_code="red")
+
+                    self._finalize_job_progress_row(job_id, success) # This updates UI and overall progress bar
+
+                    if job_id in self._active_jobs:
+                        self._active_jobs[job_id]['status'] = 'completed' # Mark as completed
+                    self._check_all_jobs_complete() # Check if all jobs are done
+
+
+                # Add more message types as needed (e.g., for dynamic UI creation)
+
+            except Exception as e: # Was queue.Empty, but Manager().Queue() might raise different
+                # self._emit_or_print(f"Error processing results queue: {e}", is_error=True)
+                break # No more items or an error occurred
+
+    def _check_all_jobs_complete(self):
+        # This function will be called after a job completes to see if all jobs are done.
+        # For now, it's a placeholder.
+        all_done = True
+        if not self._job_queue.empty(): # Check if there are still jobs to be processed
+            all_done = False
+        else: # If job queue is empty, check if all active jobs are 'completed'
+            for job_id, job_info in self._active_jobs.items():
+                if job_info.get('status') != 'completed':
+                    all_done = False
+                    break
+
+        if all_done:
+            self._emit_or_print("All conversion jobs finished.", fallback_color_code="green")
+            if self.statusbar:
+                self.statusbar.showMessage("All jobs finished.")
+            self.set_ui_enabled_for_conversion(True) # Re-enable UI
+            if self._results_timer.isActive():
+                self._results_timer.stop()
+            # self._shutdown_executor() # Optionally shutdown executor if no more jobs are expected soon
+
+    def _add_job_progress_row(self, job_id, filename):
+        """Adds a new row of progress widgets for a given job."""
+        if not self.dynamic_progress_layout:
+            self._log_warning(f"Cannot add progress row for job {job_id}: dynamic_progress_layout is None.")
+            return
+
+        if job_id in self._active_jobs and self._active_jobs[job_id].get('label') is not None:
+            # Row might already exist if job_started is re-sent or handled multiple times
+            self._log_warning(f"Job row for job_id {job_id} already exists. Updating filename.")
+            self._active_jobs[job_id]['label'].setText(filename)
+            return
+
+        row_index = self.dynamic_progress_layout.rowCount()
+
+        # Filename Label
+        label = QLabel(f"{filename}")
+        label.setToolTip(filename) # Show full path on hover potentially
+        self.dynamic_progress_layout.addWidget(label, row_index, 0) # Column 0
+
+        # Progress Bar
+        progress_bar = QProgressBar()
+        progress_bar.setRange(0, 100)
+        progress_bar.setValue(0)
+        progress_bar.setTextVisible(True)
+        self.dynamic_progress_layout.addWidget(progress_bar, row_index, 1) # Column 1
+
+        # Cancel Button (visual only for now)
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setToolTip(f"Cancel job {job_id}")
+        # cancel_button.clicked.connect(lambda: self._request_specific_job_cancel(job_id)) # For future
+        cancel_button.setEnabled(True) # Initially enabled
+        self.dynamic_progress_layout.addWidget(cancel_button, row_index, 2) # Column 2
+
+        # Store widgets in _active_jobs
+        if job_id not in self._active_jobs: # Should have been created in _start_conversion_processes
+             self._active_jobs[job_id] = {'filename': filename, 'status': 'running'} # Ensure it exists
+
+        self._active_jobs[job_id]['label'] = label
+        self._active_jobs[job_id]['progress_bar'] = progress_bar
+        self._active_jobs[job_id]['cancel_button'] = cancel_button
+        self._active_jobs[job_id]['row_index'] = row_index
+
+        # Make sure the progress group box is visible if it's the first job row added
+        if self.progress_group_box and not self.progress_group_box.isVisible():
+            self.progress_group_box.setVisible(True)
+
+
+    def _update_job_progress(self, job_id, percentage):
+        if job_id in self._active_jobs and self._active_jobs[job_id].get('progress_bar'):
+            self._active_jobs[job_id]['progress_bar'].setValue(percentage)
+        else:
+            self._log_warning(f"Could not update progress for job {job_id}: UI elements not found.")
+
+    def _finalize_job_progress_row(self, job_id, success):
+        if job_id in self._active_jobs:
+            job_info = self._active_jobs[job_id]
+            if job_info.get('label'):
+                current_text = job_info['label'].text()
+                status_prefix = "DONE: " if success else "FAILED: "
+                job_info['label'].setText(f"{status_prefix}{current_text}")
+                # Optionally change color
+                # palette = job_info['label'].palette()
+                # color = QColor("green") if success else QColor("red")
+                # palette.setColor(job_info['label'].foregroundRole(), color)
+                # job_info['label'].setPalette(palette)
+
+            if job_info.get('progress_bar'):
+                job_info['progress_bar'].setValue(100)
+
+            if job_info.get('cancel_button'):
+                job_info['cancel_button'].setEnabled(False)
+                job_info['cancel_button'].setText("Finished")
+
+            # Update overall progress bar
+            if self.overall_progress_bar:
+                self.overall_progress_bar.setValue(self.overall_progress_bar.value() + 1)
+        else:
+            self._log_warning(f"Could not finalize progress row for job {job_id}: UI elements not found.")
+
+    def _clear_dynamic_job_rows(self):
+        if not self.dynamic_progress_layout:
+            return
+        while self.dynamic_progress_layout.count():
+            item = self.dynamic_progress_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self._active_jobs.clear()
+
 
     def _validate_conversion_setup(self):
         """Validate the conversion setup."""
@@ -1359,30 +1769,74 @@ class ConverterWindow(QMainWindow):
         
         return True
 
-    def _start_conversion_thread(self, selected_files_data, output_folder):
-        """Start the conversion worker thread."""
+    def _start_conversion_processes(self, selected_files_data, output_folder):
+        """Initialize ProcessPoolExecutor and add jobs to the queue."""
+        if not self._process_pool_executor:
+            self._process_pool_executor = concurrent.futures.ProcessPoolExecutor(
+                max_workers=config.settings.CONCURRENT_JOBS
+            )
+
+        if not self._results_timer.isActive():
+            self._results_timer.start()
+
         primary_out_ext, secondary_out_ext = self._get_output_extensions()
-        
-        total_files = len(selected_files_data)
-        selected_file_paths = [data[COL_PATH] for data in selected_files_data]
-        
-        current_overwrite_files = (self.overwrite_files_checkbox.isChecked() 
-                                 if self.overwrite_files_checkbox else False)
+        current_overwrite_files = (self.overwrite_files_checkbox.isChecked()
+                                   if self.overwrite_files_checkbox else False)
 
-        # Setup UI for conversion
+        total_files_to_queue = len(selected_files_data)
+        self._active_jobs.clear() # Clear from previous run
+        self._job_id_counter = 0 # Reset job ID counter
+        self._clear_dynamic_job_rows() # Clear UI rows from previous run
+
+
+        # Setup UI for conversion (overall progress)
         self.set_ui_enabled_for_conversion(False)
-        self._setup_progress_ui(total_files)
+        self._setup_progress_ui(total_files_to_queue) # This will need adjustment for individual jobs
         self._setup_log_visibility()
+        if self.log_output_text: # Clear log from previous run
+            self.log_output_text.clear()
 
-        # Create and start worker thread
-        self.conversion_thread = ConversionWorker(
-            selected_file_paths, self.selected_media_type_details,
-            output_folder, current_overwrite_files,
-            primary_out_ext, secondary_out_ext
-        )
+
+        for file_data_row in selected_files_data:
+            file_path = file_data_row[COL_PATH]
+            self._job_id_counter += 1
+            job_id = self._job_id_counter
+
+            job_payload = {
+                "job_id": job_id,
+                "file_path": file_path,
+                # "conversion_details_repr": repr(self.selected_media_type_details), # Not used currently
+                "conversion_func_name": self.selected_media_type_details.get('conversion_func_name'),
+                "output_folder_path": output_folder,
+                "overwrite_files": current_overwrite_files,
+                "selected_primary_output_ext": primary_out_ext,
+                "selected_secondary_output_ext": secondary_out_ext,
+                "config_settings_dict": config.settings.get_all_settings_for_sharing(), # Pass relevant settings
+                "is_multi_file_job_type": any(ext in (self.selected_media_type_details.get("input_ext") or []) for ext in ['cue', 'gdi'])
+            }
+            self._job_queue.put(job_payload)
+            self._active_jobs[job_id] = {
+                'filename': os.path.basename(file_path),
+                'status': 'queued',
+                'progress_bar': None, # Will be created later
+                'label': None # Will be created later
+            }
+
+        # Submit worker_task to the executor for each worker
+        for _ in range(config.settings.CONCURRENT_JOBS):
+            self._process_pool_executor.submit(
+                process_worker_task, # This will be a new top-level function
+                self._job_queue,
+                self._results_queue
+            )
         
-        self._connect_worker_signals()
-        self.conversion_thread.start()
+        # Update overall progress label based on queued jobs
+        if self.overall_label:
+            self.overall_label.setText(f"Overall Progress (0/{total_files_to_queue} files queued)")
+        if self.overall_progress_bar:
+             self.overall_progress_bar.setMaximum(total_files_to_queue) # Each job is one unit for overall
+             self.overall_progress_bar.setValue(0)
+
 
     def _get_output_extensions(self):
         """Get primary and secondary output extensions."""
@@ -1407,22 +1861,20 @@ class ConverterWindow(QMainWindow):
             self.progress_group_box.setVisible(True)
 
         if self.overall_label:
-            self.overall_label.setText(f"Overall Progress (0/{total_files} files)")
+            self.overall_label.setText(f"Overall Progress (0/{total_files_queued} files)")
         
         if self.overall_progress_bar:
-            self.overall_progress_bar.setMaximum(total_files * N_STAGES_PER_FILE)
+            self.overall_progress_bar.setMaximum(total_files_queued) # Max is total number of jobs
             self.overall_progress_bar.setValue(0)
 
-        if self.file_label:
-            self.file_label.setText("Current File: -")
-        
-        if self.file_progress_bar:
-            self.file_progress_bar.setRange(0, 100)
-            self.file_progress_bar.setValue(0)
+        # The old single file_label and file_progress_bar are hidden, so no need to set them up here.
+        # Dynamic rows will handle individual job display.
 
-        for button in [self.overall_cancel_button, self.file_cancel_button]:
-            if button:
-                button.setEnabled(True)
+        if self.overall_cancel_button: # Only overall cancel button is relevant at this stage
+            self.overall_cancel_button.setEnabled(True)
+        if self.file_cancel_button: # This one is for the old single file progress, should be hidden
+            self.file_cancel_button.setEnabled(False)
+
 
         action_button_text = self.main_action_button.text() if self.main_action_button else "Job"
         if self.statusbar:
@@ -1650,20 +2102,29 @@ class ConverterWindow(QMainWindow):
             
             if reply == QMessageBox.StandardButton.Yes:
                 print("DEBUG: User confirmed exit during active conversion.")
-                self._ensure_thread_stopped()
+                self._request_conversion_stop() # Signal jobs to stop
+                self._shutdown_executor()       # Shutdown executor
+                if self._results_timer.isActive():
+                    self._results_timer.stop()
+                # self._ensure_thread_stopped() # Old thread logic
                 event.accept()
                 if app:
                     print("DEBUG: Calling app.quit() from closeEvent (conversion was active).")
-                    app.quit()
+                    app.quit() # Ensure app quits
             else:
                 print("DEBUG: User cancelled exit during active conversion.")
                 event.ignore()
-        else:
-            print("DEBUG: No active conversion, accepting close event.")
+        else: # No conversion thread or executor active
+            print("DEBUG: No active conversion/executor, accepting close event.")
+            if self._process_pool_executor: # Still ensure executor is down if it exists but not "running jobs"
+                self._request_conversion_stop()
+                self._shutdown_executor()
+            if self._results_timer.isActive():
+                self._results_timer.stop()
             event.accept()
             if app:
                 print("DEBUG: Calling app.quit() from closeEvent (no conversion).")
-                app.quit()
+                app.quit() # Ensure app quits
 
     def eventFilter(self, watched_object, event):
         """Handle drag and drop events."""
