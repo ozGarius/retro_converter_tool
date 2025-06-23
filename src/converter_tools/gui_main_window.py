@@ -1860,10 +1860,10 @@ class ConverterWindow(QMainWindow):
             self.progress_group_box.setVisible(True)
 
         if self.overall_label:
-            self.overall_label.setText(f"Overall Progress (0/{total_files_queued} files)")
+            self.overall_label.setText(f"Overall Progress (0/{total_files} files)")
         
         if self.overall_progress_bar:
-            self.overall_progress_bar.setMaximum(total_files_queued) # Max is total number of jobs
+            self.overall_progress_bar.setMaximum(total_files) # Max is total number of jobs
             self.overall_progress_bar.setValue(0)
 
         # The old single file_label and file_progress_bar are hidden, so no need to set them up here.
