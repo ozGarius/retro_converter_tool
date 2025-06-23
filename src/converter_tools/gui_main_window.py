@@ -8,6 +8,7 @@ import json
 import multiprocessing
 import threading
 import concurrent.futures
+import html # For escaping messages
 from multiprocessing import Manager
 
 try:
@@ -19,7 +20,7 @@ try:
         QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar, QGridLayout
     )
     from PySide6.QtGui import (QAction, QKeySequence, QColor, QPalette,
-                               QCloseEvent, QIcon, QDropEvent)
+                               QCloseEvent, QIcon, QDropEvent, QTextCharFormat)
     from PySide6.QtCore import Qt, Slot, Signal, QPoint, QMimeData, QEvent, QTimer
     from PySide6.QtUiTools import QUiLoader
 except ImportError as e:
@@ -397,6 +398,15 @@ class ConverterWindow(QMainWindow):
         if missing_widgets:
             self._show_fatal_error(f"Critical UI elements not found: {', '.join(missing_widgets)}")
 
+        # Attempt to make the log output text area vertically expandable
+        if self.log_output_text:
+            size_policy = self.log_output_text.sizePolicy()
+            size_policy.setVerticalStretch(1) # Give it a stretch factor greater than 0
+            size_policy.setVerticalPolicy(QSizePolicy.Policy.Expanding)
+            self.log_output_text.setSizePolicy(size_policy)
+            # As a test, you could also set a minimum height, though Expanding should be key
+            # self.log_output_text.setMinimumHeight(100)
+
     def _setup_drag_drop(self):
         """Configure drag and drop functionality."""
         # Disable drag/drop for everything first
@@ -628,16 +638,27 @@ class ConverterWindow(QMainWindow):
         else:
             print(f"DEBUG: {message}", file=sys.stderr)
 
-    def _emit_or_print(self, message, fallback_color_code="white"):
-        """Emit message to log or print as fallback."""
+    def _emit_or_print(self, message, fallback_color_code=None, is_error=False): # Added is_error, changed default for fallback_color_code
+        """Emit message to log or print as fallback. HTML escapes messages for safety."""
         if self.log_output_text:
-            color_map = {"yellow": "orange", "red": "red"}
-            color = color_map.get(fallback_color_code, "white")
-            if color != "white":
-                self.log_output_text.append(f"<font color='{color}'>{message}</font>")
+            target_color = None
+            if is_error: # Prioritize is_error flag for red color
+                target_color = "red"
+            elif fallback_color_code and fallback_color_code.lower() != "white": # "white" is treated as no specific color
+                # Define a map for specific color names if needed, or pass valid HTML colors directly
+                color_map = {"yellow": "orange", "red": "red", "cyan": "cyan", "green": "green", "blue": "blue"}
+                target_color = color_map.get(fallback_color_code.lower(), fallback_color_code)
+
+            # Always escape the message to prevent HTML injection if message comes from unsafe source
+            escaped_message = html.escape(str(message))
+
+            if target_color:
+                self.log_output_text.append(f"<font color='{target_color}'>{escaped_message}</font>")
             else:
-                self.log_output_text.append(message)
+                # Append plain (but escaped) text. This should use the default text color.
+                self.log_output_text.append(escaped_message)
         else:
+            # Console output remains simple
             print(message)
 
     # Dialog methods
@@ -770,11 +791,17 @@ class ConverterWindow(QMainWindow):
             save_app_settings()
             
             if self.statusbar:
-                self.statusbar.showMessage(f"Max concurrent jobs set to {num_jobs}.")
+                self.statusbar.showMessage(f"Max concurrent jobs set to {num_jobs}. Restart jobs for change to take full effect if already running.")
 
             # Update action states
             for action in self.concurrent_job_actions:
                 action.setChecked(action is triggered_action)
+
+            # If an executor exists, shut it down. It will be recreated with the new
+            # max_workers value when the next conversion starts.
+            if self._process_pool_executor:
+                self._emit_or_print("INFO: Concurrent jobs setting changed. Shutting down existing worker pool. It will restart on next job.", fallback_color_code="cyan")
+                self._shutdown_executor() # This sets self._process_pool_executor to None
         else:
             if utils.APP_LOGGER:
                 utils.APP_LOGGER.error(f"Invalid data for concurrent jobs action: {triggered_action.data() if triggered_action else 'Unknown'}")
@@ -1771,9 +1798,17 @@ class ConverterWindow(QMainWindow):
     def _start_conversion_processes(self, selected_files_data, output_folder):
         """Initialize ProcessPoolExecutor and add jobs to the queue."""
         if not self._process_pool_executor:
+            # Ensure the executor is created with the current CONCURRENT_JOBS setting
+            current_max_workers = config.settings.CONCURRENT_JOBS
+            self._emit_or_print(f"INFO: Initializing ProcessPoolExecutor with max_workers = {current_max_workers}", fallback_color_code="cyan")
             self._process_pool_executor = concurrent.futures.ProcessPoolExecutor(
-                max_workers=config.settings.CONCURRENT_JOBS
+                max_workers=current_max_workers
             )
+        # else:
+            # TODO: Future: Consider if executor needs recreation if CONCURRENT_JOBS changed
+            # since it was last created. For now, it's recreated if None.
+            # The _handle_concurrent_jobs_changed method now handles shutting down the executor
+            # if it exists and the setting changes, so this 'else' branch is less critical.
 
         if not self._results_timer.isActive():
             self._results_timer.start()
@@ -1965,6 +2000,17 @@ class ConverterWindow(QMainWindow):
             self.statusbar.showMessage(status_msg)
         
         if self.log_output_text:
+            # Reset character format to default before appending the summary
+            cursor = self.log_output_text.textCursor()
+            default_char_format = QTextCharFormat()
+            # If you want to use the theme's default text color explicitly:
+            # palette_default_color = self.log_output_text.palette().color(QPalette.ColorRole.Text)
+            # default_char_format.setForeground(palette_default_color)
+            cursor.setCharFormat(default_char_format)
+            self.log_output_text.setTextCursor(cursor) # Apply the format change at current cursor position
+
+            # Now append the message. It should use the default format.
+            # The <b> tag will still apply boldness.
             self.log_output_text.append(f"\n<b>{status_msg}</b>")
 
         # Update progress bars to completion
@@ -2045,15 +2091,13 @@ class ConverterWindow(QMainWindow):
 
     @Slot(str)
     def handle_output_update(self, message):
-        """Handle output log updates."""
-        if self.log_output_text:
-            self.log_output_text.append(message)
+        """Handle output log updates by emitting plain (escaped) text."""
+        self._emit_or_print(message) # No specific color, will use default
 
     @Slot(str)
     def handle_error_update(self, message):
-        """Handle error log updates."""
-        if self.log_output_text:
-            self.log_output_text.append(f"<font color='red'>{message}</font>")
+        """Handle error log updates by emitting red (escaped) text."""
+        self._emit_or_print(message, is_error=True) # is_error=True will make it red
 
     @Slot()
     def open_settings(self):
