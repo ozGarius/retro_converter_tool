@@ -42,34 +42,34 @@ if __name__ == '__main__':
 
     # --- Argument Parsing (Modified) ---
     parser = argparse.ArgumentParser(description="Retro Converter Tool.")
-parser.add_argument('--cli', action='store_true', help='Launch the Command-Line Interface instead of the GUI.')
-parser.add_argument('input_path', nargs='?', default=None, help='Optional input file/folder path (used with --cli).')
+    parser.add_argument('--cli', action='store_true', help='Launch the Command-Line Interface instead of the GUI.')
+    parser.add_argument('input_path', nargs='?', default=None, help='Optional input file/folder path (used with --cli).')
 
-# Parse arguments
-args, unknown = parser.parse_known_args()
+    # Parse arguments
+    args, unknown = parser.parse_known_args()
 
-# --- Initial Checks (Remain the same) ---
-print("Performing initial checks...")
-checks_passed = True
-if not utils.check_tools_exist(config.ESSENTIAL_TOOLS):
-    checks_passed = False
-if config.settings.COPY_LOCALLY and not os.path.exists(config.settings.MAIN_TEMP_DIR):
-    try:
-        os.makedirs(config.settings.MAIN_TEMP_DIR)
-        print(f"\033[92mCreated main temp directory: \"{config.settings.MAIN_TEMP_DIR}\"\033[0m")
-    except OSError as e:
-        print(f"\033[91mERROR: Failed to create main temporary directory {config.settings.MAIN_TEMP_DIR}: {e}\033[0m")
+    # --- Initial Checks (Remain the same) ---
+    print("Performing initial checks...")
+    checks_passed = True
+    if not utils.check_tools_exist(config.ESSENTIAL_TOOLS):
         checks_passed = False
+    if config.settings.COPY_LOCALLY and not os.path.exists(config.settings.MAIN_TEMP_DIR):
+        try:
+            os.makedirs(config.settings.MAIN_TEMP_DIR)
+            print(f"\033[92mCreated main temp directory: \"{config.settings.MAIN_TEMP_DIR}\"\033[0m")
+        except OSError as e:
+            print(f"\033[91mERROR: Failed to create main temporary directory {config.settings.MAIN_TEMP_DIR}: {e}\033[0m")
+            checks_passed = False
 
-if not checks_passed:
-    input("Initial checks failed. Press Enter to exit.")
-    sys.exit(1)
-print("Initial checks passed.")
+    if not checks_passed:
+        input("Initial checks failed. Press Enter to exit.")
+        sys.exit(1)
+    print("Initial checks passed.")
 
-# --- Launch Mode Decision (Modified) ---
-if args.cli:
-    print("Launching Command-Line Interface (CLI)...")
-    cli.run_cli(input_path_from_args=args.input_path)
-else:
-    print("Launching GUI...")
-    gui.run_gui()
+    # --- Launch Mode Decision (Modified) ---
+    if args.cli:
+        print("Launching Command-Line Interface (CLI)...")
+        cli.run_cli(input_path_from_args=args.input_path)
+    else:
+        print("Launching GUI...")
+        gui.run_gui()
