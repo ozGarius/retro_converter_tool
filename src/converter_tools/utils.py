@@ -248,7 +248,12 @@ def emit_or_print(message, signal=None, fallback_color_code=None, is_error=False
     }
 
     if signal:
-        signal.emit(message)
+        if callable(signal): # Check if it's a function (like our worker queue putters)
+            signal(message)
+        elif hasattr(signal, 'emit'): # Check if it's a Qt Signal
+            signal.emit(message)
+        else: # Fallback if it's neither, just print
+            print(message) # Or handle as an error/warning
     else:
         color_code_to_use = None
         if fallback_color_code:

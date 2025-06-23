@@ -40,6 +40,10 @@ if __name__ == '__main__':
     import multiprocessing
     multiprocessing.freeze_support()
 
+    # --- Load Application Settings ---
+    # This should be done once, early in the main process.
+    config.load_app_settings()
+
     # --- Argument Parsing (Modified) ---
     parser = argparse.ArgumentParser(description="Retro Converter Tool.")
     parser.add_argument('--cli', action='store_true', help='Launch the Command-Line Interface instead of the GUI.')

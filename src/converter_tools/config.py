@@ -276,5 +276,6 @@ TOOL_MAXCSO = os.path.join(TOOLS_DIR, "ext", 'maxcso.exe')
 TOOL_RECYCLE = os.path.join(TOOLS_DIR, "ext", 'recycle.exe')
 ESSENTIAL_TOOLS = [TOOL_7ZA, TOOL_DOLPHINTOOL, TOOL_CHDMAN, TOOL_MAXCSO]
 
-# --- Load settings when the module is imported ---
-load_app_settings()
+# --- Settings are no longer loaded automatically on module import ---
+# load_app_settings() # Removed
+# They should be explicitly loaded by the main application entry point.

@@ -2081,7 +2081,7 @@ class ConverterWindow(QMainWindow):
         app = QApplication.instance()
 
         jobs_are_active = False
-        if self._process_pool_executor and not self._process_pool_executor._shutdown:
+        if self._process_pool_executor: # Check if executor exists
             # Check if job queue has pending items or if active_jobs has non-completed tasks
             if not self._job_queue.empty():
                 jobs_are_active = True
@@ -2115,7 +2115,7 @@ class ConverterWindow(QMainWindow):
         else: # No jobs active or queued, or executor is already shutdown
             print("DEBUG: No active jobs, accepting close event.")
             # Ensure cleanup if executor exists but might not have been active
-            if self._process_pool_executor and not self._process_pool_executor._shutdown:
+            if self._process_pool_executor: # Check if executor exists before trying to shut down
                 self._request_conversion_stop() # Should be harmless if queue is empty
                 self._shutdown_executor()
             if self._results_timer.isActive():
