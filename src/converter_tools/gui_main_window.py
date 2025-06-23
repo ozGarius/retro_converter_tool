@@ -20,7 +20,7 @@ try:
     )
     from PySide6.QtGui import (QAction, QKeySequence, QColor, QPalette,
                                QCloseEvent, QIcon, QDropEvent)
-    from PySide6.QtCore import Qt, Slot, Signal, QPoint, QMimeData, QEvent
+    from PySide6.QtCore import Qt, Slot, Signal, QPoint, QMimeData, QEvent, QTimer
     from PySide6.QtUiTools import QUiLoader
 except ImportError as e:
     try:
