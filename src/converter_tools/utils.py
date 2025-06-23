@@ -10,11 +10,17 @@ import tempfile
 
 from src.converter_tools import config
 import re
+import html
 
 try:
     import send2trash
 except ImportError:
     send2trash = None
+
+try:
+    from PySide6.QtWidgets import QTextEdit
+except ImportError:
+    QTextEdit = None # Fallback if PySide6 is not available
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
@@ -247,14 +253,31 @@ def emit_or_print(message, signal=None, fallback_color_code=None, is_error=False
         "underline_blue": "\033[4;94m",
     }
 
+    escaped_message = html.escape(str(message)) # Ensure message is string and escaped
+
     if signal:
-        if callable(signal): # Check if it's a function (like our worker queue putters)
-            signal(message)
-        elif hasattr(signal, 'emit'): # Check if it's a Qt Signal
-            signal.emit(message)
-        else: # Fallback if it's neither, just print
-            print(message) # Or handle as an error/warning
-    else:
+        if QTextEdit and isinstance(signal, QTextEdit):
+            # Handle QTextEdit: append HTML with color
+            target_color = None
+            if is_error:
+                target_color = "red"
+            elif fallback_color_code and fallback_color_code.lower() != "white":
+                # Using a simplified color map here, can be expanded or use direct HTML colors
+                gui_color_map = {"yellow": "orange", "red": "red", "cyan": "cyan", "green": "green", "blue": "blue"}
+                target_color = gui_color_map.get(fallback_color_code.lower(), fallback_color_code)
+
+            if target_color:
+                signal.append(f"<font color='{target_color}'>{escaped_message}</font>")
+            else:
+                signal.append(escaped_message) # Append plain escaped text
+        elif hasattr(signal, 'emit') and callable(signal.emit): # Check if it's a Qt Signal
+            signal.emit(str(message)) # Qt signals typically expect string
+        elif callable(signal): # Check if it's a function (like our worker queue putters)
+            signal(str(message))
+        else: # Fallback if signal is not recognized, print to console
+            # This case should be rare if signal is always one of the above or None
+            print(f"Signal type not recognized, printing message: {message}")
+    else: # No signal provided, print to console with ANSI colors
         color_code_to_use = None
         if fallback_color_code:
             color_code_to_use = color_map.get(

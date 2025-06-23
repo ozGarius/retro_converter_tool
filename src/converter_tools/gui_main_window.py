@@ -8,7 +8,7 @@ import json
 import multiprocessing
 import threading
 import concurrent.futures
-import html # For escaping messages
+# import html # No longer needed here, moved to utils.py
 from multiprocessing import Manager
 
 try:
@@ -638,28 +638,26 @@ class ConverterWindow(QMainWindow):
         else:
             print(f"DEBUG: {message}", file=sys.stderr)
 
-    def _emit_or_print(self, message, fallback_color_code=None, is_error=False): # Added is_error, changed default for fallback_color_code
-        """Emit message to log or print as fallback. HTML escapes messages for safety."""
+    def _emit_or_print(self, message, fallback_color_code=None, is_error=False):
+        """
+        Wrapper to call the consolidated utils.emit_or_print, directing output
+        to this window's log_output_text widget.
+        """
         if self.log_output_text:
-            target_color = None
-            if is_error: # Prioritize is_error flag for red color
-                target_color = "red"
-            elif fallback_color_code and fallback_color_code.lower() != "white": # "white" is treated as no specific color
-                # Define a map for specific color names if needed, or pass valid HTML colors directly
-                color_map = {"yellow": "orange", "red": "red", "cyan": "cyan", "green": "green", "blue": "blue"}
-                target_color = color_map.get(fallback_color_code.lower(), fallback_color_code)
-
-            # Always escape the message to prevent HTML injection if message comes from unsafe source
-            escaped_message = html.escape(str(message))
-
-            if target_color:
-                self.log_output_text.append(f"<font color='{target_color}'>{escaped_message}</font>")
-            else:
-                # Append plain (but escaped) text. This should use the default text color.
-                self.log_output_text.append(escaped_message)
+            utils.emit_or_print(
+                message,
+                signal=self.log_output_text,
+                fallback_color_code=fallback_color_code,
+                is_error=is_error
+            )
         else:
-            # Console output remains simple
-            print(message)
+            # Fallback if log_output_text somehow doesn't exist, though it should.
+            utils.emit_or_print(
+                message,
+                signal=None, # Ensures console output
+                fallback_color_code=fallback_color_code,
+                is_error=is_error
+            )
 
     # Dialog methods
     @Slot()
@@ -1563,9 +1561,9 @@ class ConverterWindow(QMainWindow):
                     self._update_job_progress(job_id, percentage)
                     # self._emit_or_print(f"Job {job_id} File Progress: {percentage}%", fallback_color_code="blue") # Log less
                 elif message_type == "output_update":
-                    self._emit_or_print(f"Job {job_id} Log: {data['message']}")
+                    self._emit_or_print(f"Job {job_id} Log: {data['message']}") # No color, default
                 elif message_type == "error_update":
-                    self._emit_or_print(f"Job {job_id} Error: {data['message']}", fallback_color_code="red")
+                    self._emit_or_print(f"Job {job_id} Error: {data['message']}", is_error=True) # Use is_error flag
                 elif message_type == "job_started":
                     # TODO: Create UI elements for this job_id
                     filename = data.get("filename", "Unknown file")
@@ -1578,7 +1576,7 @@ class ConverterWindow(QMainWindow):
                     if success:
                         self._emit_or_print(f"Job {job_id} ({job_filename}) Completed Successfully.", fallback_color_code="green")
                     else:
-                        self._emit_or_print(f"Job {job_id} ({job_filename}) Failed. Check logs for details: {data.get('message', '')}", fallback_color_code="red")
+                        self._emit_or_print(f"Job {job_id} ({job_filename}) Failed. Check logs for details: {data.get('message', '')}", is_error=True) # Use is_error flag
 
                     self._finalize_job_progress_row(job_id, success) # This updates UI and overall progress bar
 
