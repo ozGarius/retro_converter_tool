@@ -2,7 +2,7 @@
 
 import sys
 import os
-import traceback
+# import traceback # No longer used directly in this file
 import time
 import json
 import multiprocessing
@@ -46,9 +46,15 @@ from src.converter_tools import menu_definitions
 from src.converter_tools.gui_settings import SettingsDialog
 from src.converter_tools.gui_m3u_creator import M3UCreatorWindow
 
+# Worker process task function
+from src.converter_tools.worker_process import process_worker_task
+# N_STAGES_PER_FILE is now defined in worker_process.py, but results_queue handlers might need it
+# For now, let's assume it's implicitly handled or passed if needed by GUI side.
+# If GUI needs it directly (e.g. for initializing total stages display for a job before worker reports it),
+# it might need to be imported from worker_process or remain here if also used here.
+# For now, removing from here as it's primarily worker logic. If errors arise, will re-add or import.
+# N_STAGES_PER_FILE = 3
 
-# Number of distinct stages reported by utils.process_file for progress tracking.
-N_STAGES_PER_FILE = 3
 
 # Constants
 COL_CHECK = 0
@@ -69,181 +75,8 @@ ICON_PATH = os.path.join(os.path.dirname(__file__), "assets", "icons", "app_icon
 THREAD_STOP_TIMEOUT = 3000  # milliseconds
 QUIT_THREAD_TIMEOUT = 2000  # milliseconds
 
-
-# --- Worker Process Task ---
-# This function will be run by each process in the ProcessPoolExecutor
-def process_worker_task(job_queue, results_queue):
-    # Minimal re-initialization of config for the process if needed
-    # For now, assume settings are passed per job or are simple enough not to need full re-init
-    # config.initialize_config_for_process() # Hypothetical function
-
-    while True:
-        try:
-            job_payload = job_queue.get()
-            if job_payload is None:  # Sentinel value to stop the worker
-                break
-
-            job_id = job_payload["job_id"]
-            original_file_path = job_payload["file_path"] # Renamed for clarity
-            conversion_func_name = job_payload["conversion_func_name"]
-            output_folder_path_final_dest = job_payload["output_folder_path"] # Renamed for clarity
-            overwrite_files = job_payload["overwrite_files"]
-            selected_primary_output_ext = job_payload["selected_primary_output_ext"]
-            selected_secondary_output_ext = job_payload["selected_secondary_output_ext"]
-            is_multi_file_job_type = job_payload.get("is_multi_file_job_type", False)
-
-            job_temp_dir = None # Initialize
-
-            try:
-                # Restore settings in the worker process's global config.settings object
-                shared_settings_dict = job_payload.get("config_settings_dict", {})
-                config.settings.restore_from_shared(shared_settings_dict)
-            except Exception as e:
-                results_queue.put({"job_id": job_id, "type": "error_update", "data": {"message": f"Worker process failed to eval settings: {e}"}})
-                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": "Settings failure"}})
-                continue
-
-            current_file_name = os.path.basename(original_file_path)
-            results_queue.put({"job_id": job_id, "type": "job_started", "data": {"filename": current_file_name, "total_stages": N_STAGES_PER_FILE}})
-
-            # --- Signal Wrappers for results_queue ---
-            def send_output_update_worker(message): # Renamed to avoid conflict if this file also has send_output_update
-                results_queue.put({"job_id": job_id, "type": "output_update", "data": {"message": message}})
-
-            def send_error_update_worker(message, is_error=True):
-                results_queue.put({"job_id": job_id, "type": "error_update", "data": {"message": message}})
-
-            # Create job-specific temp directory
-            # utils.create_temp_dir needs the base name of the input file for its prefix logic.
-            job_temp_dir = utils.create_temp_dir(original_file_path, output_signal=send_output_update_worker, error_signal=send_error_update_worker)
-            if not job_temp_dir:
-                send_error_update_worker(f"Failed to create temp directory for job {job_id}.")
-                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": "Temp dir creation failed"}})
-                continue
-
-            # Stage files into the job_temp_dir
-            path_to_process_in_temp = utils.stage_job_files(
-                original_file_path,
-                job_temp_dir,
-                is_multi_file_job_type,
-                config.settings.COPY_LOCALLY, # Use restored setting
-                output_signal=send_output_update_worker,
-                error_signal=send_error_update_worker
-            )
-
-            if not path_to_process_in_temp:
-                send_error_update_worker(f"Failed to stage files for job {job_id} ({current_file_name}).")
-                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": "File staging failed"}})
-                if job_temp_dir: utils.cleanup(job_temp_dir, output_signal=send_output_update_worker, error_signal=send_error_update_worker)
-                continue
-
-            cumulative_stages_done_for_file = 0
-            def stage_reporter_for_process_file(stage_description):
-                nonlocal cumulative_stages_done_for_file
-                cumulative_stages_done_for_file +=1
-                results_queue.put({
-                    "job_id": job_id, "type": "status_update", # This was overall progress, now it's per-job stage
-                    "data": {
-                        "description": stage_description,
-                        "current_step": cumulative_stages_done_for_file,
-                        "total_steps": N_STAGES_PER_FILE
-                    }
-                })
-                # Simple percentage for individual file progress bar
-                file_percentage = int((cumulative_stages_done_for_file / N_STAGES_PER_FILE) * 100)
-                results_queue.put({
-                    "job_id": job_id, "type": "file_progress_update",
-                    "data": {"percentage": file_percentage}
-                })
-
-
-            # --- Get the actual conversion function ---
-            conv_func = getattr(conversions, conversion_func_name, None) if conversion_func_name else None
-            if not callable(conv_func):
-                error_msg = f"Conversion function '{conversion_func_name}' not found in worker."
-                send_error_update(error_msg)
-                results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": False, "message": error_msg}})
-                continue
-
-            # --- Call utils.process_file ---
-            # Note: utils.process_file and its dependencies (like utils.run_command)
-            # must be safe to run in a separate process. They should not rely on GUI elements
-            # or shared state that isn't process-safe.
-            # The `output_signal` and `error_signal` are now wrappers.
-
-            # Critical: File dependency handling needs to be done here or within process_file
-            # For now, assuming process_file or the conversion routines handle it based on the main file_path
-
-            success = utils.process_file(
-                staged_primary_file_path=path_to_process_in_temp, # Path to the file that should be processed by the tool
-                job_temp_dir=job_temp_dir, # The temp dir where the tool writes output
-                original_file_path_for_naming_and_delete=original_file_path, # Used for output naming and optional deletion
-                conversion_func=conv_func,
-                format_out=selected_primary_output_ext, # Primary output extension expected
-                format_out2=selected_secondary_output_ext, # Secondary output extension, if any
-                output_signal=send_output_update_worker,
-                error_signal=send_error_update_worker,
-                explicit_output_dir=output_folder_path_final_dest, # Final destination for processed files
-                allow_overwrite=overwrite_files,
-                target_format_from_worker=selected_primary_output_ext, # Hint for some conversion functions
-                stage_reporter=stage_reporter_for_process_file
-            )
-
-            # Ensure final progress update if not already sent by stage_reporter
-            if cumulative_stages_done_for_file < N_STAGES_PER_FILE: # Should typically be N_STAGES_PER_FILE - 1 before this
-                 final_stage_desc = "Completed" if success else "Failed"
-                 # This will push it to N_STAGES_PER_FILE
-                 stage_reporter_for_process_file(final_stage_desc)
-
-            results_queue.put({"job_id": job_id, "type": "job_completed", "data": {"success": success}})
-
-            # Handle deletion of original file if successful and configured
-            if success and config.settings.DELETE_SOURCE_ON_SUCCESS:
-                send_output_update_worker(f"Job successful, deleting source: {original_file_path}")
-                # utils.cleanup takes care of original file deletion if path is provided
-                # However, the main job_temp_dir cleanup is done by process_file.
-                # We need a separate call for the original source files.
-                # Let's make a small helper or call send2trash directly.
-                try:
-                    # For CUE/GDI, delete dependencies as well
-                    files_to_delete_source = [original_file_path]
-                    if is_multi_file_job_type:
-                        if original_file_path.lower().endswith('.cue'):
-                            files_to_delete_source.extend(utils._get_cue_dependencies(original_file_path))
-                        elif original_file_path.lower().endswith('.gdi'):
-                            files_to_delete_source.extend(utils._get_gdi_dependencies(original_file_path))
-
-                    for f_path_to_del in set(files_to_delete_source): # Use set to avoid duplicates
-                        if os.path.exists(f_path_to_del):
-                            if send2trash:
-                                send2trash.send2trash(f_path_to_del)
-                                send_output_update_worker(f"Sent to trash: {f_path_to_del}")
-                            else:
-                                os.remove(f_path_to_del) # Fallback to permanent delete
-                                send_output_update_worker(f"Permanently deleted: {f_path_to_del} (send2trash not available)")
-                except Exception as del_e:
-                    send_error_update_worker(f"Error deleting source file {original_file_path} or its dependencies: {del_e}")
-
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            # Try to inform the main thread about the error
-            try:
-                job_id_error = job_payload.get("job_id", "unknown") if 'job_payload' in locals() else "unknown"
-                results_queue.put({
-                    "job_id": job_id_error, "type": "error_update",
-                    "data": {"message": f"Unhandled error in worker process: {e}\n{tb_str}"}
-                })
-                results_queue.put({"job_id": job_id_error, "type": "job_completed", "data": {"success": False, "message": str(e)}})
-            except Exception as queue_e:
-                # If we can't even put to queue, print to stderr (might be visible in console)
-                print(f"WORKER ERROR (job: {job_id_error if 'job_id_error' in locals() else 'unknown'}): {e}\n{tb_str}", file=sys.stderr)
-                print(f"WORKER ERROR: Could not put error to results_queue: {queue_e}", file=sys.stderr)
-            if job_payload is None: # If error happened while getting None (sentinel)
-                break # Exit loop
-            # Continue to next job if possible, or break if error is too severe (e.g. sentinel processing)
-            continue # Try to process next job
-    # Worker process is finishing
-    print(f"Worker process {os.getpid()} exiting.")
+# Note: process_worker_task function has been moved to worker_process.py
+# Note: N_STAGES_PER_FILE constant has been moved to worker_process.py
 
 
 # Hardcoded content (avoiding README parsing)
