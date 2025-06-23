@@ -1690,8 +1690,29 @@ class ConverterWindow(QMainWindow):
             # Update overall progress bar
             if self.overall_progress_bar:
                 self.overall_progress_bar.setValue(self.overall_progress_bar.value() + 1)
+
+            # Remove UI elements for the completed job
+            if job_info.get('label'):
+                self.dynamic_progress_layout.removeWidget(job_info['label'])
+                job_info['label'].deleteLater()
+            if job_info.get('progress_bar'):
+                self.dynamic_progress_layout.removeWidget(job_info['progress_bar'])
+                job_info['progress_bar'].deleteLater()
+            if job_info.get('cancel_button'):
+                self.dynamic_progress_layout.removeWidget(job_info['cancel_button'])
+                job_info['cancel_button'].deleteLater()
+
+            # Remove the job from active_jobs dictionary after UI cleanup
+            # self._active_jobs.pop(job_id, None) # Now handled by _check_all_jobs_complete or when it's truly done with the job
+            # It's important that _check_all_jobs_complete still knows about this job to count it as 'completed'.
+            # The job_info['status'] = 'completed' is the key for that.
+            # We can clear the UI widget references from the job_info though.
+            job_info['label'] = None
+            job_info['progress_bar'] = None
+            job_info['cancel_button'] = None
+
         else:
-            self._log_warning(f"Could not finalize progress row for job {job_id}: UI elements not found.")
+            self._log_warning(f"Could not finalize progress row for job {job_id}: UI elements not found in _active_jobs.")
 
     def _clear_dynamic_job_rows(self):
         if not self.dynamic_progress_layout:

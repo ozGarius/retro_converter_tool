@@ -322,14 +322,19 @@ def run_command(command, cwd=None, output_signal=None, error_signal=None, known_
         stderr_clean = _strip_ansi_codes(result.stderr.strip())
         if stderr_clean:
             log_msg = f"--- STDERR ---\n{stderr_clean}\n--------------"
-            emit_or_print(log_msg, error_signal, is_error=True)
+            # If command was successful (returncode 0), STDERR is treated as info.
+            # Otherwise, it's part of an error.
+            if result.returncode == 0:
+                emit_or_print(log_msg, output_signal) # Log to normal output
+            else:
+                emit_or_print(log_msg, error_signal, is_error=True) # Log as error
 
         if result.returncode != 0:
             err_msg = f"ERROR: Command failed (code {result.returncode})"
             if known_error_codes and result.returncode in known_error_codes:
                 err_msg += f": {known_error_codes[result.returncode]}"
-            elif stderr_clean and stderr_clean not in err_msg:
-                err_msg += f"\nTool Output (stderr):\n{stderr_clean}"
+            # The STDERR content is already logged above, so no need to repeat it in err_msg
+            # unless it wasn't logged due to being empty (but then it wouldn't be in stderr_clean).
             emit_or_print(err_msg, error_signal, is_error=True)
             return False
         return True
