@@ -1494,9 +1494,8 @@ class ConverterWindow(QMainWindow):
     @Slot()
     def start_conversion(self):
         """Start the conversion process."""
-        if self.conversion_thread and self.conversion_thread.isRunning():
-            QMessageBox.warning(self, "Busy", "A conversion is already in progress.")
-            return
+        # The check for an existing conversion_thread.isRunning() has been removed
+        # as ProcessPoolExecutor manages concurrency. UI state should prevent re-entry.
 
         if not self._validate_conversion_setup():
             return
@@ -1889,19 +1888,8 @@ class ConverterWindow(QMainWindow):
         if self.log_output_text:
             self.log_output_text.clear()
 
-    def _connect_worker_signals(self):
-        """Connect worker thread signals."""
-        signal_connections = [
-            ('status_update', self.handle_overall_progress_update),
-            ('file_progress_update', self.handle_file_progress_update),
-            ('output_update', self.handle_output_update),
-            ('error_update', self.handle_error_update),
-            ('critical_error_occurred', self.handle_critical_error),
-            ('finished', self.handle_conversion_finished)
-        ]
-
-        for signal_name, slot in signal_connections:
-            getattr(self.conversion_thread, signal_name).connect(slot)
+    # The _connect_worker_signals method has been removed as it was specific to the old QThread-based worker
+    # and is not used with the ProcessPoolExecutor, which uses queues for communication.
 
     # Progress and completion handlers
     @Slot(int, int, str)
@@ -1996,7 +1984,7 @@ class ConverterWindow(QMainWindow):
 
         # Re-enable UI and cleanup
         self.set_ui_enabled_for_conversion(True)
-        self.conversion_thread = None
+        # self.conversion_thread = None # Removed as it's no longer used
         self.update_convert_button_state()
 
     def set_ui_enabled_for_conversion(self, enabled):
@@ -2092,38 +2080,49 @@ class ConverterWindow(QMainWindow):
         print("DEBUG: ConverterWindow.closeEvent() triggered.")
         app = QApplication.instance()
 
-        if self.conversion_thread and self.conversion_thread.isRunning():
+        jobs_are_active = False
+        if self._process_pool_executor and not self._process_pool_executor._shutdown:
+            # Check if job queue has pending items or if active_jobs has non-completed tasks
+            if not self._job_queue.empty():
+                jobs_are_active = True
+            else:
+                for job_id, job_info in self._active_jobs.items():
+                    if job_info.get('status') != 'completed':
+                        jobs_are_active = True
+                        break
+
+        if jobs_are_active:
             reply = QMessageBox.question(
                 self, 'Confirm Exit',
-                "A job is currently running. Are you sure you want to exit?",
+                "Conversion jobs are currently active or queued. Are you sure you want to exit?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
             
             if reply == QMessageBox.StandardButton.Yes:
-                print("DEBUG: User confirmed exit during active conversion.")
-                self._request_conversion_stop() # Signal jobs to stop
-                self._shutdown_executor()       # Shutdown executor
+                print("DEBUG: User confirmed exit during active/queued jobs.")
+                self._request_conversion_stop() # Attempt to clear queue and signal stop
+                self._shutdown_executor()       # Shutdown executor gracefully
                 if self._results_timer.isActive():
                     self._results_timer.stop()
-                # self._ensure_thread_stopped() # Old thread logic
                 event.accept()
                 if app:
-                    print("DEBUG: Calling app.quit() from closeEvent (conversion was active).")
+                    print("DEBUG: Calling app.quit() from closeEvent (jobs were active).")
                     app.quit() # Ensure app quits
             else:
-                print("DEBUG: User cancelled exit during active conversion.")
+                print("DEBUG: User cancelled exit during active/queued jobs.")
                 event.ignore()
-        else: # No conversion thread or executor active
-            print("DEBUG: No active conversion/executor, accepting close event.")
-            if self._process_pool_executor: # Still ensure executor is down if it exists but not "running jobs"
-                self._request_conversion_stop()
+        else: # No jobs active or queued, or executor is already shutdown
+            print("DEBUG: No active jobs, accepting close event.")
+            # Ensure cleanup if executor exists but might not have been active
+            if self._process_pool_executor and not self._process_pool_executor._shutdown:
+                self._request_conversion_stop() # Should be harmless if queue is empty
                 self._shutdown_executor()
             if self._results_timer.isActive():
                 self._results_timer.stop()
             event.accept()
             if app:
-                print("DEBUG: Calling app.quit() from closeEvent (no conversion).")
+                print("DEBUG: Calling app.quit() from closeEvent (no jobs active).")
                 app.quit() # Ensure app quits
 
     def eventFilter(self, watched_object, event):
