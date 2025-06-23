@@ -34,8 +34,14 @@ except Exception as e:
     input("\nPress Enter to exit.")
     sys.exit(1)
 
-# --- Argument Parsing (Modified) ---
-parser = argparse.ArgumentParser(description="Retro Converter Tool.")
+if __name__ == '__main__':
+    # Required for Windows multiprocessing when creating executables
+    # or when the main script might be imported by a spawned process.
+    import multiprocessing
+    multiprocessing.freeze_support()
+
+    # --- Argument Parsing (Modified) ---
+    parser = argparse.ArgumentParser(description="Retro Converter Tool.")
 parser.add_argument('--cli', action='store_true', help='Launch the Command-Line Interface instead of the GUI.')
 parser.add_argument('input_path', nargs='?', default=None, help='Optional input file/folder path (used with --cli).')
 

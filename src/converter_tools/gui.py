@@ -52,6 +52,11 @@ def run_gui():
 
 
 if __name__ == "__main__":
+    # Required for Windows multiprocessing when creating executables
+    # or when the main script might be imported by a spawned process.
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     # This block is executed if gui.py is run directly as a script.
     print("DEBUG (gui.py launcher): Running GUI directly from __main__...")
     run_gui()  # Call the wrapper function
