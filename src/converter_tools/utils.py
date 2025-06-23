@@ -479,7 +479,25 @@ def cleanup(temp_path, output_signal=None, error_signal=None): # Removed origina
             except Exception as e_unexpected_rm:
                 emit_or_print(
                     f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
-                break
+                break # Break from retries on unexpected error
+
+            # After successfully removing job-specific temp_path, check its parent
+            if not config.settings.COPY_LOCALLY: # This logic only applies if not using MAIN_TEMP_DIR
+                parent_dir = os.path.dirname(temp_path)
+                if os.path.basename(parent_dir) == "_processing_temps_":
+                    try:
+                        if not os.listdir(parent_dir): # Check if empty
+                            os.rmdir(parent_dir)
+                            emit_or_print(f"Removed empty parent temp directory: \"{parent_dir}\"", output_signal)
+                        # else:
+                            # emit_or_print(f"DEBUG: Parent temp dir \"{parent_dir}\" not empty, not removing.", output_signal)
+                    except OSError as e:
+                        emit_or_print(f"WARNING: Could not remove parent temp directory \"{parent_dir}\": {e}", error_signal, fallback_color_code="yellow")
+                    except Exception as e_parent_rm:
+                        emit_or_print(f"ERROR: Unexpected error removing parent temp dir \"{parent_dir}\": {e_parent_rm}", error_signal, is_error=True)
+                # else:
+                    # emit_or_print(f"DEBUG: Parent of job temp dir ('{parent_dir}') is not named '_processing_temps_'. Skipping its removal check.", output_signal)
+            break # Break from retries as shutil.rmtree was successful or an unexpected error occurred
 
     # Original file deletion logic is now handled in process_worker_task
 
