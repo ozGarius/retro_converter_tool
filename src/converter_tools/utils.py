@@ -486,17 +486,19 @@ def cleanup(temp_path, output_signal=None, error_signal=None): # Removed origina
                 parent_dir = os.path.dirname(temp_path)
                 if os.path.basename(parent_dir) == "_processing_temps_":
                     try:
-                        if not os.listdir(parent_dir): # Check if empty
+                        dir_contents = os.listdir(parent_dir)
+                        if not dir_contents: # Check if empty
+                            emit_or_print(f"INFO: Attempting to remove empty parent temp directory: \"{parent_dir}\"", output_signal)
                             os.rmdir(parent_dir)
-                            emit_or_print(f"Removed empty parent temp directory: \"{parent_dir}\"", output_signal)
-                        # else:
-                            # emit_or_print(f"DEBUG: Parent temp dir \"{parent_dir}\" not empty, not removing.", output_signal)
+                            emit_or_print(f"INFO: Successfully removed empty parent temp directory: \"{parent_dir}\"", output_signal)
+                        else:
+                            emit_or_print(f"DEBUG: Parent temp dir \"{parent_dir}\" not empty. Contents: {dir_contents}. Not removing.", output_signal)
                     except OSError as e:
-                        emit_or_print(f"WARNING: Could not remove parent temp directory \"{parent_dir}\": {e}", error_signal, fallback_color_code="yellow")
+                        emit_or_print(f"WARNING: Could not remove parent temp directory \"{parent_dir}\". Error: {e.strerror} (Code: {e.errno}). Path: {e.filename}", error_signal, fallback_color_code="yellow")
                     except Exception as e_parent_rm:
                         emit_or_print(f"ERROR: Unexpected error removing parent temp dir \"{parent_dir}\": {e_parent_rm}", error_signal, is_error=True)
-                # else:
-                    # emit_or_print(f"DEBUG: Parent of job temp dir ('{parent_dir}') is not named '_processing_temps_'. Skipping its removal check.", output_signal)
+                else:
+                    emit_or_print(f"DEBUG: Parent of job temp dir ('{parent_dir}') is not named '_processing_temps_'. Skipping its removal.", output_signal)
             break # Break from retries as shutil.rmtree was successful or an unexpected error occurred
 
     # Original file deletion logic is now handled in process_worker_task
