@@ -16,7 +16,7 @@ try:
         QPushButton, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView,
         QComboBox, QLabel, QTextEdit, QSizePolicy, QSpacerItem, QMenuBar,
         QFileDialog, QMessageBox, QStatusBar, QDialog, QDialogButtonBox,
-        QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar
+        QLineEdit, QSpinBox, QGroupBox, QMenu, QProgressBar, QGridLayout
     )
     from PySide6.QtGui import (QAction, QKeySequence, QColor, QPalette,
                                QCloseEvent, QIcon, QDropEvent)
