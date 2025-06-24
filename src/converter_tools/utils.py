@@ -11,6 +11,9 @@ import tempfile
 from src.converter_tools import config
 import re
 import html
+import threading
+# For queue.Queue for inter-thread communication within run_command
+from queue import Queue, Empty
 
 try:
     import send2trash
@@ -328,37 +331,112 @@ def get_free_disk_space_gb(path):
         return None
 
 
-def run_command(command, cwd=None, output_signal=None, error_signal=None, known_error_codes=None):
+def _threaded_stream_reader(stream, output_q, stream_name, line_callback=None, process_pid=None):
+    """
+    Reads a stream line by line and puts tuples of (stream_name, line) onto output_q.
+    Optionally calls line_callback for each line.
+    """
+    try:
+        for line_bytes in iter(stream.readline, b''):
+            if not line_bytes: # End of stream
+                break
+            try:
+                line_decoded = line_bytes.decode('utf-8', errors='replace').rstrip()
+                output_q.put((stream_name, line_decoded)) # Put to queue for main thread logging
+                if line_callback:
+                    line_callback(line_decoded) # Also call direct callback if provided
+            except Exception as e_decode:
+                # Fallback for decoding errors, put raw bytes representation or error message
+                output_q.put((stream_name, f"Error decoding line: {e_decode} - Raw: {line_bytes!r}"))
+        stream.close()
+    except Exception as e:
+        # This error occurs in the thread. It should be logged or reported.
+        # For now, printing to stderr of the main process (if this thread is part of it)
+        # or a worker process's stderr.
+        print(f"Error in _threaded_stream_reader ({stream_name} for PID {process_pid}): {e}", file=sys.stderr)
+    finally:
+        output_q.put((stream_name, None)) # Sentinel to indicate this stream is done
+
+
+def run_command(command, cwd=None, output_signal=None, error_signal=None, known_error_codes=None, stderr_line_callback=None):
     command_str = ' '.join(command)
-    emit_or_print(f">> Running: {command_str}",
-                   output_signal, fallback_color_code="green")
+    # Use emit_or_print for the initial "Running" message, ensuring it goes to the correct signal if provided
+    emit_or_print(f">> Running: {command_str}", signal=output_signal, fallback_color_code="green")
 
     try:
-        result = subprocess.run(
-            command, cwd=cwd, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace'
+        # Using Popen for non-blocking I/O
+        proc = subprocess.Popen(
+            command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            bufsize=1, # Line buffered
+            # `text=True` cannot be used with `bufsize=1` for line buffering in older Pythons,
+            # and manual decoding is more robust for mixed encodings or errors.
+            # So, we'll read bytes and decode.
         )
-        stdout_clean = _strip_ansi_codes(result.stdout.strip())
-        if stdout_clean:
-            log_msg = f"--- STDOUT ---\n{stdout_clean}\n--------------"
-            emit_or_print(log_msg, output_signal)
 
-        stderr_clean = _strip_ansi_codes(result.stderr.strip())
-        if stderr_clean:
-            log_msg = f"--- STDERR ---\n{stderr_clean}\n--------------"
-            # If command was successful (returncode 0), STDERR is treated as info.
-            # Otherwise, it's part of an error.
-            if result.returncode == 0:
-                emit_or_print(log_msg, output_signal) # Log to normal output
-            else:
-                emit_or_print(log_msg, error_signal, is_error=True) # Log as error
+        output_q = Queue() # Queue to gather output lines from threads
 
-        if result.returncode != 0:
-            err_msg = f"ERROR: Command failed (code {result.returncode})"
-            if known_error_codes and result.returncode in known_error_codes:
-                err_msg += f": {known_error_codes[result.returncode]}"
-            # The STDERR content is already logged above, so no need to repeat it in err_msg
-            # unless it wasn't logged due to being empty (but then it wouldn't be in stderr_clean).
-            emit_or_print(err_msg, error_signal, is_error=True)
+        stdout_thread = threading.Thread(
+            target=_threaded_stream_reader,
+            args=(proc.stdout, output_q, "stdout", None, proc.pid) # No specific line callback for stdout beyond logging
+        )
+        stderr_thread = threading.Thread(
+            target=_threaded_stream_reader,
+            args=(proc.stderr, output_q, "stderr", stderr_line_callback, proc.pid) # Pass stderr_line_callback
+        )
+
+        stdout_thread.daemon = True # Threads should not block program exit
+        stderr_thread.daemon = True
+        stdout_thread.start()
+        stderr_thread.start()
+
+        # Process lines from the queue in the main thread (of this function call)
+        # This ensures emit_or_print (which might interact with Qt) is called from the right context
+        # if output_signal/error_signal are Qt signals.
+        # If they are simple functions (like worker queue putters), this is also fine.
+
+        active_streams = 2
+        while active_streams > 0:
+            try:
+                stream_name, line = output_q.get(timeout=0.1) # Small timeout to prevent hard lock
+                if line is None: # Sentinel: one stream finished
+                    active_streams -= 1
+                    continue
+
+                # Log all lines from stdout and stderr (if not handled by callback exclusively)
+                # The callback for stderr (stderr_line_callback) is for specific parsing (e.g., progress)
+                # General logging of stderr lines still happens here.
+                # We treat all stderr lines as informational initially, error status determined by return code.
+                log_line = f"--- {stream_name.upper()} (PID {proc.pid}) ---\n{_strip_ansi_codes(line)}\n--------------"
+                emit_or_print(log_line, signal=output_signal)
+
+            except Empty: # queue.Empty
+                if proc.poll() is not None: # Process finished, but queue might still have items
+                    # Drain the queue one last time without timeout or very short one
+                    while not output_q.empty():
+                        try:
+                            stream_name, line = output_q.get_nowait()
+                            if line is None:
+                                active_streams -=1 # Should already be handled, but for safety
+                                continue
+                            log_line = f"--- {stream_name.upper()} (PID {proc.pid}) ---\n{_strip_ansi_codes(line)}\n--------------"
+                            emit_or_print(log_line, signal=output_signal)
+                        except Empty:
+                            break # Queue is drained
+                    if active_streams == 0 or output_q.empty(): # Ensure we break if all streams are done
+                        break
+                continue # If process not finished and queue was empty, continue polling
+
+        stdout_thread.join(timeout=1) # Wait for threads to finish
+        stderr_thread.join(timeout=1)
+
+        returncode = proc.wait() # Ensure process has terminated and get final code
+
+        if returncode != 0:
+            err_msg = f"ERROR: Command failed (code {returncode})"
+            if known_error_codes and returncode in known_error_codes:
+                err_msg += f": {known_error_codes[returncode]}"
+            # Note: stderr content that might explain the error was already logged as it came in.
+            emit_or_print(err_msg, signal=error_signal, is_error=True)
             return False
         return True
     except FileNotFoundError:
@@ -629,6 +707,28 @@ def process_file(staged_primary_file_path, job_temp_dir, original_file_path_for_
     }
     if target_format_from_worker and hasattr(conversion_func, '__code__') and 'target_format_from_worker' in conversion_func.__code__.co_varnames:
         conversion_args["target_format_from_worker"] = target_format_from_worker
+
+    # Define a callback for run_command to parse progress from chdman stderr lines
+    def chdman_stderr_progress_parser(line):
+        if file_progress_reporter: # Check if a progress reporter callback was provided
+            # Regex to find percentages like "19.6%" or "100%"
+            match = re.search(r"(\d+\.?\d*)\s*%", line)
+            if match:
+                try:
+                    percentage = float(match.group(1))
+                    # Report the percentage, capping at 99% as 100% is usually for the final stage.
+                    # The file_progress_reporter is actually stage_reporter_for_process_file from worker_process.py
+                    # which needs to be adapted to handle direct percentage values.
+                    file_progress_reporter(min(percentage, 99.0))
+                except ValueError:
+                    pass # Could not convert matched group to float, ignore this line for progress.
+
+    # If the conversion function is known to be chdman-related, pass the parser to it.
+    # The conversion functions in conversions.py have been updated to accept stderr_line_callback.
+    if "chd" in conversion_func.__name__.lower() or \
+       (hasattr(conversion_func, 'tool_name') and str(getattr(conversion_func, 'tool_name', '')).lower() == 'chdman'):
+        conversion_args['stderr_line_callback'] = chdman_stderr_progress_parser
+
     conversion_successful = conversion_func(**conversion_args)
 
     # Debugging pause can be re-enabled if needed by uncommenting here

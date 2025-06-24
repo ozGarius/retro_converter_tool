@@ -91,21 +91,34 @@ def process_worker_task(job_queue, results_queue):
                 continue
 
             cumulative_stages_done_for_file = 0
-            def stage_reporter_for_process_file(stage_description):
+            def stage_reporter_for_process_file(stage_or_percentage):
                 nonlocal cumulative_stages_done_for_file
-                cumulative_stages_done_for_file +=1
-                results_queue.put({
-                    "job_id": job_id, "type": "status_update",
-                    "data": {
-                        "description": stage_description,
-                        "current_step": cumulative_stages_done_for_file,
-                        "total_steps": N_STAGES_PER_FILE # N_STAGES_PER_FILE should be accessible here
-                    }
-                })
-                file_percentage = int((cumulative_stages_done_for_file / N_STAGES_PER_FILE) * 100)
+                current_file_percentage = 0
+
+                if isinstance(stage_or_percentage, (int, float)):
+                    # Direct percentage update from tool's stderr
+                    current_file_percentage = int(stage_or_percentage)
+                    # We don't send a "status_update" here as stages are not changing, only sub-stage progress
+                elif isinstance(stage_or_percentage, str):
+                    # Stage description update
+                    cumulative_stages_done_for_file +=1
+                    results_queue.put({
+                        "job_id": job_id, "type": "status_update",
+                        "data": {
+                            "description": stage_or_percentage, # stage_description is now stage_or_percentage
+                            "current_step": cumulative_stages_done_for_file,
+                            "total_steps": N_STAGES_PER_FILE
+                        }
+                    })
+                    current_file_percentage = int((cumulative_stages_done_for_file / N_STAGES_PER_FILE) * 100)
+                else:
+                    # Should not happen, but good to log
+                    send_error_update_worker(f"Job {job_id}: Invalid type for stage_reporter: {type(stage_or_percentage)}")
+                    return
+
                 results_queue.put({
                     "job_id": job_id, "type": "file_progress_update",
-                    "data": {"percentage": file_percentage}
+                    "data": {"percentage": current_file_percentage}
                 })
 
             conv_func = getattr(conversions, conversion_func_name, None) if conversion_func_name else None
