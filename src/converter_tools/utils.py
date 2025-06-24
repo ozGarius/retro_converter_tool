@@ -337,17 +337,13 @@ def _threaded_stream_reader(stream, output_q, stream_name, line_callback=None, p
     Optionally calls line_callback for each line.
     """
     try:
-        for line_bytes in iter(stream.readline, b''):
-            if not line_bytes: # End of stream
+        for line in iter(stream.readline, ''): # Iterate over text lines
+            if not line: # End of stream
                 break
-            try:
-                line_decoded = line_bytes.decode('utf-8', errors='replace').rstrip()
-                output_q.put((stream_name, line_decoded)) # Put to queue for main thread logging
-                if line_callback:
-                    line_callback(line_decoded) # Also call direct callback if provided
-            except Exception as e_decode:
-                # Fallback for decoding errors, put raw bytes representation or error message
-                output_q.put((stream_name, f"Error decoding line: {e_decode} - Raw: {line_bytes!r}"))
+            line_stripped = line.rstrip()
+            output_q.put((stream_name, line_stripped)) # Put to queue for main thread logging
+            if line_callback:
+                line_callback(line_stripped) # Also call direct callback if provided
         stream.close()
     except Exception as e:
         # This error occurs in the thread. It should be logged or reported.
@@ -364,13 +360,15 @@ def run_command(command, cwd=None, output_signal=None, error_signal=None, known_
     emit_or_print(f">> Running: {command_str}", signal=output_signal, fallback_color_code="green")
 
     try:
-        # Using Popen for non-blocking I/O
+        # Using Popen for non-blocking I/O in text mode with line buffering
         proc = subprocess.Popen(
-            command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            bufsize=1, # Line buffered
-            # `text=True` cannot be used with `bufsize=1` for line buffering in older Pythons,
-            # and manual decoding is more robust for mixed encodings or errors.
-            # So, we'll read bytes and decode.
+            command, cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,  # Enable text mode
+            encoding='utf-8',
+            errors='replace',
+            bufsize=1  # Request line buffering
         )
 
         output_q = Queue() # Queue to gather output lines from threads
