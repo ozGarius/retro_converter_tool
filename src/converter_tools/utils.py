@@ -710,15 +710,19 @@ def process_file(staged_primary_file_path, job_temp_dir, original_file_path_for_
     def chdman_stderr_progress_parser(line):
         if file_progress_reporter: # Check if a progress reporter callback was provided
             # Regex to find percentages like "19.6%" or "100%"
+            print(f"CHDMAN_PARSER_DEBUG: Raw line: '{line}'") # DEBUG
             match = re.search(r"(\d+\.?\d*)\s*%", line)
             if match:
+                print(f"CHDMAN_PARSER_DEBUG: Matched: {match.group(0)}, Raw Percentage: {match.group(1)}") # DEBUG
                 try:
                     percentage = float(match.group(1))
                     # Report the percentage, capping at 99% as 100% is usually for the final stage.
                     # The file_progress_reporter is actually stage_reporter_for_process_file from worker_process.py
                     # which needs to be adapted to handle direct percentage values.
+                    print(f"CHDMAN_PARSER_DEBUG: Parsed float: {percentage}, Calling reporter with: {min(percentage, 99.0)}") # DEBUG
                     file_progress_reporter(min(percentage, 99.0))
                 except ValueError:
+                    print(f"CHDMAN_PARSER_DEBUG: ValueError converting '{match.group(1)}'") # DEBUG
                     pass # Could not convert matched group to float, ignore this line for progress.
 
     # If the conversion function is known to be chdman-related, pass the parser to it.

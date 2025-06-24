@@ -94,6 +94,8 @@ def process_worker_task(job_queue, results_queue):
             def stage_reporter_for_process_file(stage_or_percentage):
                 nonlocal cumulative_stages_done_for_file
                 current_file_percentage = 0
+                # DEBUG PRINT:
+                print(f"WORKER_REPORTER_DEBUG (Job {job_id}): Received: '{stage_or_percentage}' (Type: {type(stage_or_percentage)})")
 
                 if isinstance(stage_or_percentage, (int, float)):
                     # Direct percentage update from tool's stderr
@@ -116,6 +118,8 @@ def process_worker_task(job_queue, results_queue):
                     send_error_update_worker(f"Job {job_id}: Invalid type for stage_reporter: {type(stage_or_percentage)}")
                     return
 
+                # DEBUG PRINT:
+                print(f"WORKER_REPORTER_DEBUG (Job {job_id}): Sending file_progress_update, Percentage: {current_file_percentage}")
                 results_queue.put({
                     "job_id": job_id, "type": "file_progress_update",
                     "data": {"percentage": current_file_percentage}
