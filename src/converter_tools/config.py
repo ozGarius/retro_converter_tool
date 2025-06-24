@@ -118,9 +118,15 @@ DEFAULT_SETTINGS = {
     "VALIDATE_FILE": True,
     "DOLPHIN_COMPRESS_LEVEL": 9, # This will be effectively superseded by DOLPHINTOOL_RVZ_COMPRESSION_LEVEL but kept for transition
 
-    # New settings
+    # UI Persistence Settings
+    "OUTPUT_IN_SAME_FOLDER": True,
+    "OVERWRITE_EXISTING_FILES": False,
+    # DELETE_SOURCE_ON_SUCCESS is already present
+    "LAST_SELECTED_OUTPUT_FOLDER": None,
+    "LAST_USER_PATH": None, # For remembering last path for Add Files/Folder dialogs
+
+    # Logging
     "LOG_DIRECTORY": "./logs/", # Relative to app root or a defined base path
-    "LAST_USED_DIRECTORY": None, # Stores the last directory used for input/output
 }
 
 

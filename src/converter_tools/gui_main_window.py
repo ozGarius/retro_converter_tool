@@ -306,6 +306,7 @@ class ConverterWindow(QMainWindow):
             (self.select_output_folder_button, 'clicked', self._on_select_output_folder_clicked),
             (self.select_output_type_button, 'clicked', self._on_select_output_type_clicked),
             (self.output_same_folder_checkbox, 'toggled', self._on_output_same_folder_toggled),
+            (self.overwrite_files_checkbox, 'toggled', self._on_overwrite_files_toggled), # Added connection
             (self.delete_input_checkbox, 'toggled', self._on_delete_input_toggled),
             (self.main_action_button, 'clicked', self.start_conversion),
             (self.toggle_log_button, 'toggled', self.toggle_log_visibility),
@@ -346,11 +347,20 @@ class ConverterWindow(QMainWindow):
         """Complete the initialization process."""
         self._populate_job_types()
         
-        if self.delete_input_checkbox:
+        if self.delete_input_checkbox: # Handles DELETE_SOURCE_ON_SUCCESS
             self.delete_input_checkbox.setChecked(config.settings.DELETE_SOURCE_ON_SUCCESS)
         
-        if self.output_same_folder_checkbox:
-            self._on_output_same_folder_toggled(self.output_same_folder_checkbox.isChecked())
+        if self.output_same_folder_checkbox: # Handles OUTPUT_IN_SAME_FOLDER
+            self.output_same_folder_checkbox.setChecked(config.settings.OUTPUT_IN_SAME_FOLDER)
+            # Ensure the UI reflects this state correctly regarding output folder visibility
+            self._on_output_same_folder_toggled(config.settings.OUTPUT_IN_SAME_FOLDER)
+
+        if self.overwrite_files_checkbox: # Handles OVERWRITE_EXISTING_FILES
+            self.overwrite_files_checkbox.setChecked(config.settings.OVERWRITE_EXISTING_FILES)
+
+        if self.output_folder_path_display and config.settings.LAST_SELECTED_OUTPUT_FOLDER:
+            self.output_folder_path_display.setText(config.settings.LAST_SELECTED_OUTPUT_FOLDER)
+            # Also update internal state if needed, though it's mainly for display until used
 
         self.update_ui_for_job_selection()
         
@@ -665,7 +675,18 @@ class ConverterWindow(QMainWindow):
         if checked and self.output_folder_path_display:
             self.output_folder_path_display.clear()
         
+        config.settings.OUTPUT_IN_SAME_FOLDER = checked
+        save_app_settings()
         self.update_convert_button_state()
+
+    @Slot(bool)
+    def _on_overwrite_files_toggled(self, checked):
+        """Handle overwrite existing files checkbox toggle."""
+        config.settings.OVERWRITE_EXISTING_FILES = checked
+        save_app_settings()
+        if self.statusbar:
+            self.statusbar.showMessage(
+                f"Overwrite existing files: {'Enabled' if checked else 'Disabled'}")
 
     @Slot(bool)
     def _on_delete_input_toggled(self, checked):
@@ -870,12 +891,16 @@ class ConverterWindow(QMainWindow):
     def add_files(self):
         """Add files through file dialog."""
         dialog_filter_name, current_input_exts = self._get_file_dialog_filter()
-        
         patterns = [f"*.{ext}" for ext in sorted(list(current_input_exts))]
         dialog_filter_string = f"{dialog_filter_name} ({' '.join(patterns)});;All Files (*.*)"
 
-        files, _ = QFileDialog.getOpenFileNames(self.ui, "Select Files", "", dialog_filter_string)
+        start_dir = config.settings.LAST_USER_PATH or os.path.expanduser("~")
+        files, _ = QFileDialog.getOpenFileNames(self.ui, "Select Files", start_dir, dialog_filter_string)
+
         if files:
+            # Save the directory of the first selected file as the last used path
+            config.settings.LAST_USER_PATH = os.path.dirname(files[0])
+            save_app_settings()
             self.process_added_paths(files, from_add_files_dialog=True, 
                                    dialog_filter_exts=current_input_exts)
 
@@ -896,8 +921,11 @@ class ConverterWindow(QMainWindow):
     @Slot()
     def add_folder(self):
         """Add folder through folder dialog."""
-        folder = QFileDialog.getExistingDirectory(self.ui, "Select Folder")
+        start_dir = config.settings.LAST_USER_PATH or os.path.expanduser("~")
+        folder = QFileDialog.getExistingDirectory(self.ui, "Select Folder", start_dir)
         if folder:
+            config.settings.LAST_USER_PATH = folder # Save the selected folder itself
+            save_app_settings()
             self.process_added_paths([folder])
 
     @Slot()
@@ -1281,11 +1309,20 @@ class ConverterWindow(QMainWindow):
         if not self.output_folder_path_display:
             return
         
-        current_path = self.output_folder_path_display.text() or os.path.expanduser("~")
+        # Use LAST_SELECTED_OUTPUT_FOLDER, then LAST_USER_PATH, then home as fallback for dialog start path
+        start_dir = config.settings.LAST_SELECTED_OUTPUT_FOLDER or \
+                    config.settings.LAST_USER_PATH or \
+                    os.path.expanduser("~")
+        current_path = self.output_folder_path_display.text() or start_dir
+
         folder = QFileDialog.getExistingDirectory(self.ui, "Select Output Folder", current_path)
         
         if folder:
-            self.output_folder_path_display.setText(os.path.normpath(folder))
+            norm_folder_path = os.path.normpath(folder)
+            self.output_folder_path_display.setText(norm_folder_path)
+            config.settings.LAST_SELECTED_OUTPUT_FOLDER = norm_folder_path
+            config.settings.LAST_USER_PATH = norm_folder_path # Also update general last user path
+            save_app_settings()
         
         self.update_convert_button_state()
 
