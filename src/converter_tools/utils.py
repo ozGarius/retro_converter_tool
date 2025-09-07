@@ -563,12 +563,14 @@ def move_files(src_dir, dest_dir_base, pattern, output_signal=None, error_signal
 
 def cleanup(temp_path, output_signal=None, error_signal=None): # Removed original_file_path
     if temp_path and os.path.exists(temp_path):
+        temp_removal_successful = False
         retries = 3
         while retries > 0:
             try:
                 shutil.rmtree(temp_path)
                 emit_or_print(
                     f"Removed temporary directory: \"{temp_path}\"", output_signal)
+                temp_removal_successful = True
                 break
             except OSError as e:
                 retries -= 1
@@ -585,25 +587,24 @@ def cleanup(temp_path, output_signal=None, error_signal=None): # Removed origina
                     f"ERROR: Unexpected error removing temp dir {temp_path}: {e_unexpected_rm}", error_signal, is_error=True)
                 break # Break from retries on unexpected error
 
-            # After successfully removing job-specific temp_path, check its parent
-            if not config.settings.COPY_LOCALLY: # This logic only applies if not using MAIN_TEMP_DIR
-                parent_dir = os.path.dirname(temp_path)
-                if os.path.basename(parent_dir) == "_processing_temps_":
-                    try:
-                        dir_contents = os.listdir(parent_dir)
-                        if not dir_contents: # Check if empty
-                            emit_or_print(f"INFO: Attempting to remove empty parent temp directory: \"{parent_dir}\"", output_signal)
-                            os.rmdir(parent_dir)
-                            emit_or_print(f"INFO: Successfully removed empty parent temp directory: \"{parent_dir}\"", output_signal)
-                        else:
-                            emit_or_print(f"DEBUG: Parent temp dir \"{parent_dir}\" not empty. Contents: {dir_contents}. Not removing.", output_signal)
-                    except OSError as e:
-                        emit_or_print(f"WARNING: Could not remove parent temp directory \"{parent_dir}\". Error: {e.strerror} (Code: {e.errno}). Path: {e.filename}", error_signal, fallback_color_code="yellow")
-                    except Exception as e_parent_rm:
-                        emit_or_print(f"ERROR: Unexpected error removing parent temp dir \"{parent_dir}\": {e_parent_rm}", error_signal, is_error=True)
-                else:
-                    emit_or_print(f"DEBUG: Parent of job temp dir ('{parent_dir}') is not named '_processing_temps_'. Skipping its removal.", output_signal)
-            break # Break from retries as shutil.rmtree was successful or an unexpected error occurred
+        # After successfully removing job-specific temp_path, check its parent
+        if temp_removal_successful and not config.settings.COPY_LOCALLY: # This logic only applies if not using MAIN_TEMP_DIR
+            parent_dir = os.path.dirname(temp_path)
+            if os.path.basename(parent_dir) == "_processing_temps_":
+                try:
+                    dir_contents = os.listdir(parent_dir)
+                    if not dir_contents: # Check if empty
+                        emit_or_print(f"INFO: Attempting to remove empty parent temp directory: \"{parent_dir}\"", output_signal)
+                        os.rmdir(parent_dir)
+                        emit_or_print(f"INFO: Successfully removed empty parent temp directory: \"{parent_dir}\"", output_signal)
+                    else:
+                        emit_or_print(f"DEBUG: Parent temp dir \"{parent_dir}\" not empty. Contents: {dir_contents}. Not removing.", output_signal)
+                except OSError as e:
+                    emit_or_print(f"WARNING: Could not remove parent temp directory \"{parent_dir}\". Error: {e.strerror} (Code: {e.errno}). Path: {e.filename}", error_signal, fallback_color_code="yellow")
+                except Exception as e_parent_rm:
+                    emit_or_print(f"ERROR: Unexpected error removing parent temp dir \"{parent_dir}\": {e_parent_rm}", error_signal, is_error=True)
+            else:
+                emit_or_print(f"DEBUG: Parent of job temp dir ('{parent_dir}') is not named '_processing_temps_'. Skipping its removal.", output_signal)
 
     # Original file deletion logic is now handled in process_worker_task
 
@@ -710,19 +711,15 @@ def process_file(staged_primary_file_path, job_temp_dir, original_file_path_for_
     def chdman_stderr_progress_parser(line):
         if file_progress_reporter: # Check if a progress reporter callback was provided
             # Regex to find percentages like "19.6%" or "100%"
-            print(f"CHDMAN_PARSER_DEBUG: Raw line: '{line}'") # DEBUG
             match = re.search(r"(\d+\.?\d*)\s*%", line)
             if match:
-                print(f"CHDMAN_PARSER_DEBUG: Matched: {match.group(0)}, Raw Percentage: {match.group(1)}") # DEBUG
                 try:
                     percentage = float(match.group(1))
                     # Report the percentage, capping at 99% as 100% is usually for the final stage.
                     # The file_progress_reporter is actually stage_reporter_for_process_file from worker_process.py
                     # which needs to be adapted to handle direct percentage values.
-                    print(f"CHDMAN_PARSER_DEBUG: Parsed float: {percentage}, Calling reporter with: {min(percentage, 99.0)}") # DEBUG
                     file_progress_reporter(min(percentage, 99.0))
                 except ValueError:
-                    print(f"CHDMAN_PARSER_DEBUG: ValueError converting '{match.group(1)}'") # DEBUG
                     pass # Could not convert matched group to float, ignore this line for progress.
 
     # If the conversion function is known to be chdman-related, pass the parser to it.
