@@ -8,11 +8,11 @@ import os
 import sys
 
 try:
-    from src.converter_tools import config
-    from src.converter_tools.config import save_app_settings
-    from src.converter_tools import utils
-    from src.converter_tools import conversions
-    from src.converter_tools import menu_definitions
+    from converter_tools import config
+    from converter_tools.config import save_app_settings
+    from converter_tools import utils
+    from converter_tools import conversions
+    from converter_tools import menu_definitions
 except ImportError: # Fallback for direct script run or different structure
     # This block is tricky. If the primary 'src.converter_tools' fails,
     # it implies 'src' is not being treated as a package root relative to project root in sys.path.

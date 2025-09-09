@@ -36,18 +36,18 @@ except ImportError as e:
     sys.exit(1)
 
 # Core application modules
-from src.converter_tools import config
-from src.converter_tools.config import save_app_settings
-from src.converter_tools import utils
-from src.converter_tools import conversions
-from src.converter_tools import menu_definitions
+from converter_tools import config
+from converter_tools.config import save_app_settings
+from converter_tools import utils
+from converter_tools import conversions
+from converter_tools import menu_definitions
 
 # GUI components from other files in this package
-from src.converter_tools.gui_settings import SettingsDialog
-from src.converter_tools.gui_m3u_creator import M3UCreatorWindow
+from converter_tools.gui_settings import SettingsDialog
+from converter_tools.gui_m3u_creator import M3UCreatorWindow
 
 # Worker process task function
-from src.converter_tools.worker_process import process_worker_task
+from converter_tools.worker_process import process_worker_task
 # N_STAGES_PER_FILE is now defined in worker_process.py, but results_queue handlers might need it
 # For now, let's assume it's implicitly handled or passed if needed by GUI side.
 # If GUI needs it directly (e.g. for initializing total stages display for a job before worker reports it),

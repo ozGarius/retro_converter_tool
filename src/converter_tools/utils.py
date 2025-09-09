@@ -8,7 +8,7 @@ import glob
 import time
 import tempfile
 
-from src.converter_tools import config
+from converter_tools import config
 import re
 import html
 import threading

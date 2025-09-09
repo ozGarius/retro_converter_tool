@@ -5,9 +5,9 @@ import sys
 import traceback
 
 # Project modules
-from src.converter_tools import config
-from src.converter_tools import utils
-from src.converter_tools import conversions
+from converter_tools import config
+from converter_tools import utils
+from converter_tools import conversions
 
 try:
     import send2trash

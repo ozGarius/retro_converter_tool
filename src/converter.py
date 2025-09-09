@@ -12,22 +12,26 @@ if project_root_dir not in sys.path:
     sys.path.insert(0, project_root_dir)
 
 try:
-    # Imports are now relative to the project root, so we prepend 'src.'
-    from src.converter_tools import gui
-    from src.converter_tools import config
-    from src.converter_tools import utils
-    from src.converter_tools import cli
-
-except (ImportError, FileNotFoundError) as e:
-    # converter_tools_path is no longer defined in this scope, adjust error message or remove
-    print(f"\033[91mERROR: Failed setup or import of 'converter_tools' modules.\033[0m")
-    print("Ensure 'config.py', 'utils.py', 'conversions.py', 'cli.py', 'gui.py',")
-    print("'gui_main_window.py', 'gui_settings.py', 'gui_worker.py',")
-    print("and '__init__.py' (empty file) are inside the 'converter_tools' folder,")
-    print("and 'converter.py' is in the directory containing 'converter_tools'.")
-    print(f"\nDetails: {e}")
-    input("\nPress Enter to exit.")
-    sys.exit(1)
+    # Try relative imports first (for PyInstaller builds from src/)
+    from converter_tools import gui
+    from converter_tools import config
+    from converter_tools import utils
+    from converter_tools import cli
+except ImportError:
+    try:
+        # Fallback to absolute imports (for running from project root)
+        from src.converter_tools import gui
+        from src.converter_tools import config
+        from src.converter_tools import utils
+        from src.converter_tools import cli
+    except ImportError as e:
+        # Both import attempts failed
+        print(f"\033[91mERROR: Failed setup or import of 'converter_tools' modules.\033[0m")
+        print("Ensure 'config.py', 'utils.py', 'conversions.py', 'cli.py', 'gui.py',")
+        print("'gui_main_window.py', 'gui_settings.py', etc. are in the 'converter_tools' folder.")
+        print(f"\nDetails: {e}")
+        input("\nPress Enter to exit.")
+        sys.exit(1)
 except Exception as e:
     print("\033[91mERROR: An unexpected error occurred during setup.\033[0m")
     print(f"Details: {e}")
