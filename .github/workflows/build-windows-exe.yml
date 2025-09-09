@@ -25,10 +25,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run PyInstaller
-        run: pyinstaller --onefile --windowed --name converter --icon src/converter_tools/assets/icons/app_icon.ico --add-data "src/converter_tools/assets:converter_tools/assets" --add-data "src/converter_tools/converter_settings.json:converter_tools" src/converter.py
+        run: |
+          cd src
+          pyinstaller --onefile --windowed --name converter --icon converter_tools/assets/icons/app_icon.ico --add-data "converter_tools/assets;converter_tools/assets" --add-data "converter_tools/converter_settings.json;converter_tools" converter.py
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: converter-windows-exe
-          path: dist/converter.exe # Path to the generated EXE
+          path: src/dist/converter.exe # Path to the generated EXE
